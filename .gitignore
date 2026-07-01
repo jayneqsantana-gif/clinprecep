@@ -2,13 +2,18 @@
 node_modules/
 
 # Build
-app/dist/
-app/dev-dist/
+dist/
+dev-dist/
+*.tsbuildinfo
 
-# Segredos — a chave da Anthropic NUNCA é commitada
+# Segredos e ambiente — a chave da Anthropic e o .env NUNCA são commitados
 .env
+.env.*
+!.env.example
 *.local
-proxy/.env
+
+# Vercel
+.vercel
 
 # Logs / SO
 *.log

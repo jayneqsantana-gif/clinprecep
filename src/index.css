@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Tema claro */
+  --bg: 244 246 249;
+  --surface: 255 255 255;
+  --surface-2: 240 243 247;
+  --border: 214 220 228;
+  --text: 17 24 39;
+  --muted: 90 100 116;
+  --brand: 13 110 156;
+  --brand-fg: 255 255 255;
+  --danger: 190 30 45;
+  --warn: 176 106 0;
+  --ok: 22 128 80;
+}
+
+.dark {
+  /* Tema escuro — plantão noturno (seção 11) */
+  --bg: 11 18 32;
+  --surface: 18 27 46;
+  --surface-2: 26 37 60;
+  --border: 40 54 82;
+  --text: 232 238 247;
+  --muted: 150 164 186;
+  --brand: 56 168 214;
+  --brand-fg: 6 14 26;
+  --danger: 248 113 113;
+  --warn: 245 179 66;
+  --ok: 74 201 138;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-text antialiased;
+  font-size: 16px; /* fontes generosas p/ tela pequena */
+}
+
+/* Área segura em telas com notch (uso no celular durante o round) */
+.safe-b {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-border bg-surface p-4 shadow-sm;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-brand-fg hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-text hover:bg-surface-2;
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:opacity-90;
+  }
+  .input {
+    @apply w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-text
+      placeholder:text-muted focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-muted;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium;
+  }
+}
