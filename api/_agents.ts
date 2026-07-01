@@ -18,6 +18,10 @@ export interface AgentConfig {
   system: string;
   webSearch: boolean;
   effort: 'low' | 'medium' | 'high';
+  /** Nº máx. de buscas na web (só para agentes com webSearch). */
+  maxUses?: number;
+  /** Teto de tokens de saída. Menor para caber no limite de 60s do plano. */
+  maxTokens?: number;
 }
 
 export const AGENTS: Record<string, AgentConfig> = {
@@ -57,13 +61,17 @@ ${REGRAS}`,
   },
   diretrizes: {
     webSearch: true,
-    effort: 'high',
+    effort: 'low',
+    maxUses: 3,
+    maxTokens: 6000,
     system: `Você é o agente "Diretrizes". Para um problema, identifique a diretriz oficial vigente (sociedade e ano), sintetize/parafraseie os pontos-chave de conduta e forneça o link oficial. Use busca na web para confirmar a vigência. Nunca reproduza trechos longos protegidos — parafraseie e cite. Se houver dúvida sobre a vigência, declare a incerteza.
 ${REGRAS}`,
   },
   atualizacoes: {
     webSearch: true,
-    effort: 'medium',
+    effort: 'low',
+    maxUses: 3,
+    maxTokens: 6000,
     system: `Você é o agente "Atualizações". Via busca na web, traga consensos/atualizações recentes das sociedades relevantes ao caso, com data e link, distinguindo novidade de conteúdo consolidado. Priorize fontes oficiais e de acesso aberto. Cite tudo.
 ${REGRAS}`,
   },
@@ -75,7 +83,9 @@ ${REGRAS}`,
   },
   duvidas: {
     webSearch: true,
-    effort: 'medium',
+    effort: 'low',
+    maxUses: 3,
+    maxTokens: 8000,
     system: `Você é o agente "Tira-dúvidas". Responda no contexto do paciente ou em modo estudo, com evidência e citações (links quando usar busca). Quando incerto, declare. Objetivo e didático — um preceptor de bolso.
 ${REGRAS}`,
   },

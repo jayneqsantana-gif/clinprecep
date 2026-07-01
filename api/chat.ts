@@ -15,9 +15,9 @@ export const config = { maxDuration: 60 };
 const DEFAULT_MODEL = process.env.CLINPRECEP_MODEL || 'claude-sonnet-5';
 const MODEL_ALLOWLIST = new Set(['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5']);
 
-function webSearchTool(model: string) {
-  if (model === 'claude-haiku-4-5') return { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
-  return { type: 'web_search_20260209', name: 'web_search', max_uses: 5 };
+function webSearchTool(model: string, maxUses: number) {
+  const type = model === 'claude-haiku-4-5' ? 'web_search_20250305' : 'web_search_20260209';
+  return { type, name: 'web_search', max_uses: maxUses };
 }
 
 /** Confirma que o token pertence a um usuário Supabase válido. */
@@ -74,7 +74,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const useModel = model && MODEL_ALLOWLIST.has(model) ? model : DEFAULT_MODEL;
   const system = systemExtra ? `${cfg.system}\n\n---\nContexto do paciente:\n${systemExtra}` : cfg.system;
-  const tools = cfg.webSearch ? [webSearchTool(useModel)] : undefined;
+  const tools = cfg.webSearch ? [webSearchTool(useModel, cfg.maxUses ?? 5)] : undefined;
+  const maxTokens = cfg.maxTokens ?? 16000;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -88,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // assim mesmo (a API aceita em runtime) e evitamos o erro de compilação.
     const streamBody = {
       model: useModel,
-      max_tokens: 16000,
+      max_tokens: maxTokens,
       thinking: { type: 'adaptive' },
       output_config: { effort: cfg.effort },
       system,
