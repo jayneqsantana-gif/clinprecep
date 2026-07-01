@@ -1,0 +1,16 @@
+# Dependências
+node_modules/
+
+# Build
+app/dist/
+app/dev-dist/
+
+# Segredos — a chave da Anthropic NUNCA é commitada
+.env
+*.local
+proxy/.env
+
+# Logs / SO
+*.log
+.DS_Store
+Thumbs.db
