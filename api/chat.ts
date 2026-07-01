@@ -84,15 +84,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const client = new Anthropic({ apiKey });
 
   try {
-    const stream = client.messages.stream({
+    // A tipagem do SDK 0.65 é anterior a `adaptive` e `output_config`; enviamos
+    // assim mesmo (a API aceita em runtime) e evitamos o erro de compilação.
+    const streamBody = {
       model: useModel,
       max_tokens: 16000,
-      thinking: { type: 'adaptive' } as never,
+      thinking: { type: 'adaptive' },
       output_config: { effort: cfg.effort },
       system,
-      tools: tools as never,
+      tools,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    });
+    };
+    const stream = client.messages.stream(streamBody as never);
 
     stream.on('text', (delta: string) => send({ type: 'text', text: delta }));
 
