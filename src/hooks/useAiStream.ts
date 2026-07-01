@@ -10,6 +10,7 @@ export function useAiStream() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [citations, setCitations] = useState<Citation[]>([]);
+  const citationsRef = useRef<Citation[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   async function run(params: {
@@ -24,6 +25,7 @@ export function useAiStream() {
     setText('');
     setError(null);
     setCitations([]);
+    citationsRef.current = [];
     setLoading(true);
     try {
       await askAgent({
@@ -35,7 +37,10 @@ export function useAiStream() {
           acc += d;
           setText(acc);
         },
-        onCitations: setCitations,
+        onCitations: (c) => {
+          citationsRef.current = c;
+          setCitations(c);
+        },
       });
       return acc;
     } catch (e) {
@@ -55,5 +60,5 @@ export function useAiStream() {
     setLoading(false);
   }
 
-  return { text, loading, error, citations, run, reset, setText };
+  return { text, loading, error, citations, citationsRef, run, reset, setText };
 }

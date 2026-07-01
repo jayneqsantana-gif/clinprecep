@@ -5,7 +5,7 @@ import { useSession } from '@/store/session';
 import { getPatient } from '@/lib/remoteRepo';
 import type { Patient } from '@/lib/types';
 import { diaInternacao, fmtBR } from '@/lib/dates';
-import { ComingSoon, EmptyState } from '@/components/ui';
+import { EmptyState } from '@/components/ui';
 import { AnamneseCard } from '@/features/anamnese/AnamneseCard';
 import { EvolucaoDiaria } from '@/features/evolucao/EvolucaoDiaria';
 import { DiferencialTab } from '@/features/diferencial/DiferencialTab';
@@ -13,6 +13,9 @@ import { PrescricaoTab } from '@/features/prescricao/PrescricaoTab';
 import { TasksPanel } from '@/features/tarefas/TasksPanel';
 import { LabsCard } from '@/features/labs/LabsCard';
 import { TimelineCard } from '@/features/labs/TimelineCard';
+import { DiretrizesTab } from '@/features/diretrizes/DiretrizesTab';
+import { AtualizacoesTab } from '@/features/atualizacoes/AtualizacoesTab';
+import { PatientDuvidas } from '@/features/duvidas/PatientDuvidas';
 
 type TabKey =
   | 'visao'
@@ -157,12 +160,12 @@ function TabContent({
     case 'diferencial':
       return <DiferencialTab patient={patient} />;
     case 'diretrizes':
-      return <ComingSoon phase="Fase 3">Revisão da diretriz vigente por problema, com link oficial.</ComingSoon>;
+      return <DiretrizesTab patient={patient} />;
     case 'atualizacoes':
-      return <ComingSoon phase="Fase 3">Novidades das sociedades relevantes ao caso (web search).</ComingSoon>;
+      return <AtualizacoesTab patient={patient} />;
     case 'prescricao':
       return <PrescricaoTab patient={patient} />;
     case 'duvidas':
-      return <ComingSoon phase="Fase 3">Chat livre no contexto do paciente, com citações.</ComingSoon>;
+      return <PatientDuvidas patient={patient} />;
   }
 }
