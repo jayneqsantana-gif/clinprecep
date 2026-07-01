@@ -5,9 +5,14 @@ import { useSession } from '@/store/session';
 import { getPatient } from '@/lib/remoteRepo';
 import type { Patient } from '@/lib/types';
 import { diaInternacao, fmtBR } from '@/lib/dates';
-import { ComingSoon, Disclaimer, EmptyState } from '@/components/ui';
+import { ComingSoon, EmptyState } from '@/components/ui';
 import { AnamneseCard } from '@/features/anamnese/AnamneseCard';
 import { EvolucaoDiaria } from '@/features/evolucao/EvolucaoDiaria';
+import { DiferencialTab } from '@/features/diferencial/DiferencialTab';
+import { PrescricaoTab } from '@/features/prescricao/PrescricaoTab';
+import { TasksPanel } from '@/features/tarefas/TasksPanel';
+import { LabsCard } from '@/features/labs/LabsCard';
+import { TimelineCard } from '@/features/labs/TimelineCard';
 
 type TabKey =
   | 'visao'
@@ -142,35 +147,21 @@ function TabContent({
             </div>
           )}
 
-          <ComingSoon phase="Fase 2">
-            Linha do tempo + curvas dos laboratoriais (Hb, Na, Cr, PCR…) e dispositivos.
-          </ComingSoon>
+          <TimelineCard patient={patient} />
+          <LabsCard patient={patient} />
+          <TasksPanel patient={patient} />
         </div>
       );
     case 'evolucao':
       return <EvolucaoDiaria patient={patient} />;
     case 'diferencial':
-      return (
-        <div className="space-y-3">
-          <Disclaimer text="Apoio ao raciocínio. Hipóteses e critérios não substituem a avaliação clínica nem a preceptoria." />
-          <ComingSoon phase="Fase 2">
-            Diferencial em 3 camadas (mais provável / não posso perder / plausível) com fontes.
-          </ComingSoon>
-        </div>
-      );
+      return <DiferencialTab patient={patient} />;
     case 'diretrizes':
       return <ComingSoon phase="Fase 3">Revisão da diretriz vigente por problema, com link oficial.</ComingSoon>;
     case 'atualizacoes':
       return <ComingSoon phase="Fase 3">Novidades das sociedades relevantes ao caso (web search).</ComingSoon>;
     case 'prescricao':
-      return (
-        <div className="space-y-3">
-          <Disclaimer text="Sugestão para conferência. A decisão e a responsabilidade da prescrição são do médico assistente." />
-          <ComingSoon phase="Fase 2">
-            Prescrição por itens + rede de segurança + checagem de alergia + "⚠️ Não pode passar".
-          </ComingSoon>
-        </div>
-      );
+      return <PrescricaoTab patient={patient} />;
     case 'duvidas':
       return <ComingSoon phase="Fase 3">Chat livre no contexto do paciente, com citações.</ComingSoon>;
   }

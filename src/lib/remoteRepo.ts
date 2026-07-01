@@ -9,7 +9,7 @@
 
 import { supabase, currentUserId } from './supabase';
 import { decryptJSON, encryptJSON, type Cipher } from './crypto';
-import type { Patient, Anamnesis, Evolution } from './types';
+import type { Patient, Anamnesis, Evolution, Task, LabResult, LabValue } from './types';
 
 export type NewPatientInput = {
   label: string;
@@ -184,4 +184,98 @@ export async function createEvolution(
 export async function deleteEvolution(id: string): Promise<void> {
   const { error } = await supabase.from('evolutions').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ───────────────────────── Pendências / Tarefas ─────────────────────────
+
+export async function listTasks(key: CryptoKey, patientId: string): Promise<Task[]> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('enc')
+    .eq('patient_id', patientId);
+  if (error) throw error;
+  const rows = (data ?? []) as { enc: Cipher }[];
+  const tasks = await Promise.all(rows.map((r) => decryptJSON<Task>(key, r.enc)));
+  // pendentes primeiro; urgentes no topo; depois por criação
+  return tasks.sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
+    return a.createdAt < b.createdAt ? 1 : -1;
+  });
+}
+
+export async function createTask(
+  key: CryptoKey,
+  input: { patientId: string; description: string; urgent: boolean; dueDate: string | null },
+): Promise<Task> {
+  const userId = await requireUser();
+  const task: Task = {
+    id: uuid(),
+    patientId: input.patientId,
+    description: input.description.trim(),
+    done: false,
+    urgent: input.urgent,
+    createdAt: nowISO(),
+    dueDate: input.dueDate,
+  };
+  const enc = await encryptJSON(key, task);
+  const { error } = await supabase
+    .from('tasks')
+    .insert({ id: task.id, patient_id: task.patientId, user_id: userId, done: false, enc });
+  if (error) throw error;
+  return task;
+}
+
+export async function setTaskDone(key: CryptoKey, task: Task, done: boolean): Promise<Task> {
+  const userId = await requireUser();
+  const updated: Task = { ...task, done };
+  const enc = await encryptJSON(key, updated);
+  const { error } = await supabase
+    .from('tasks')
+    .upsert({ id: updated.id, patient_id: updated.patientId, user_id: userId, done, enc });
+  if (error) throw error;
+  return updated;
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const { error } = await supabase.from('tasks').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Contagem de pendências abertas (barato — usa a coluna `done` em claro). */
+export async function openTaskCount(patientId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('tasks')
+    .select('id', { count: 'exact', head: true })
+    .eq('patient_id', patientId)
+    .eq('done', false);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+// ───────────────────────── Exames laboratoriais (curvas) ─────────────────────
+
+export async function listLabResults(key: CryptoKey, patientId: string): Promise<LabResult[]> {
+  const { data, error } = await supabase
+    .from('lab_results')
+    .select('enc')
+    .eq('patient_id', patientId)
+    .order('date', { ascending: true });
+  if (error) throw error;
+  const rows = (data ?? []) as { enc: Cipher }[];
+  return Promise.all(rows.map((r) => decryptJSON<LabResult>(key, r.enc)));
+}
+
+export async function addLabResult(
+  key: CryptoKey,
+  input: { patientId: string; date: string; values: LabValue[] },
+): Promise<LabResult> {
+  const userId = await requireUser();
+  const lab: LabResult = { patientId: input.patientId, date: input.date, values: input.values };
+  const enc = await encryptJSON(key, lab);
+  const { error } = await supabase
+    .from('lab_results')
+    .insert({ id: uuid(), patient_id: input.patientId, user_id: userId, date: input.date, enc });
+  if (error) throw error;
+  return lab;
 }

@@ -7,6 +7,7 @@ import {
   listPatients,
   archivePatient,
   deletePatient,
+  openTaskCount,
   type NewPatientInput,
 } from '@/lib/remoteRepo';
 import type { Patient } from '@/lib/types';
@@ -21,12 +22,19 @@ export function PatientsPage() {
   const [query, setQuery] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
   async function refresh() {
     if (!key) return;
     setLoading(true);
-    setPatients(await listPatients(key, showArchived));
+    const list = await listPatients(key, showArchived);
+    setPatients(list);
     setLoading(false);
+    // Contagem de pendências abertas por paciente (barato — coluna `done`).
+    const entries = await Promise.all(
+      list.map(async (p) => [p.id, await openTaskCount(p.id)] as const),
+    );
+    setCounts(Object.fromEntries(entries));
   }
 
   useEffect(() => {
@@ -88,6 +96,7 @@ export function PatientsPage() {
             <PatientCard
               key={p.id}
               patient={p}
+              openTasks={counts[p.id] ?? 0}
               onOpen={() => navigate(`/pacientes/${p.id}`)}
               onArchive={async () => {
                 if (!key) return;
@@ -125,23 +134,28 @@ export function PatientsPage() {
 
 function PatientCard({
   patient,
+  openTasks,
   onOpen,
   onArchive,
   onDelete,
 }: {
   patient: Patient;
+  openTasks: number;
   onOpen: () => void;
   onArchive: () => void;
   onDelete: () => void;
 }) {
   const di = diaInternacao(patient.admissionDate);
-  const hasUrgent = false; // pendências urgentes chegam na Fase 2
   return (
     <div className="card flex flex-col gap-3">
       <button className="flex-1 text-left" onClick={onOpen}>
         <div className="flex items-start justify-between gap-2">
           <span className="font-semibold">{patient.label}</span>
-          {hasUrgent && <AlertTriangle className="h-4 w-4 text-danger" />}
+          {openTasks > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 text-xs font-medium text-warn">
+              <AlertTriangle className="h-3 w-3" /> {openTasks}
+            </span>
+          )}
         </div>
         <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted">
           {patient.age != null && <span>{patient.age}a</span>}
