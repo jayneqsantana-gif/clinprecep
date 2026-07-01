@@ -1,0 +1,178 @@
+import { useEffect, useState } from 'react';
+import { Wand2, Save, Pencil, RefreshCw, FileText } from 'lucide-react';
+import { useSession } from '@/store/session';
+import { getAnamnesis, saveAnamnesis, savePatient } from '@/lib/remoteRepo';
+import { buildPatientContext, extractOrganizerJson, stripOrganizerJson } from '@/lib/context';
+import { useAiStream } from '@/hooks/useAiStream';
+import { AiOutput } from '@/components/AiOutput';
+import { Markdown } from '@/components/Markdown';
+import { CopyButton } from '@/components/ui';
+import type { Patient, Anamnesis, Problem } from '@/lib/types';
+
+/**
+ * Organização da anamnese (seção 7.2): colar texto bruto → "Organizar" (agente
+ * Organizador) → versão estruturada editável → salvar. A lista de problemas
+ * extraída atualiza o paciente.
+ */
+export function AnamneseCard({
+  patient,
+  onPatientUpdated,
+}: {
+  patient: Patient;
+  onPatientUpdated: (p: Patient) => void;
+}) {
+  const key = useSession((s) => s.key);
+  const ai = useAiStream();
+  const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [raw, setRaw] = useState('');
+  const [mode, setMode] = useState<'view' | 'input' | 'edit'>('input');
+  const [editText, setEditText] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!key) return;
+    void getAnamnesis(key, patient.id).then((a) => {
+      setAnamnesis(a);
+      setMode(a ? 'view' : 'input');
+      setLoaded(true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, patient.id]);
+
+  const structuredText = (anamnesis?.structured as { text?: string } | undefined)?.text ?? '';
+
+  async function organizar() {
+    if (!key || !raw.trim()) return;
+    const result = await ai.run({
+      agent: 'organizador',
+      systemExtra: buildPatientContext(patient),
+      messages: [{ role: 'user', content: raw }],
+    });
+    if (!result) return; // erro/abort já tratado pelo AiOutput
+    await persistir(result, raw);
+  }
+
+  async function persistir(aiText: string, rawText: string) {
+    if (!key) return;
+    setSaving(true);
+    try {
+      const clean = stripOrganizerJson(aiText);
+      const parsed = extractOrganizerJson(aiText);
+
+      // Atualiza a lista de problemas e alergias do paciente a partir do JSON.
+      let updatedPatient = patient;
+      if (parsed?.problemList?.length || parsed?.allergies?.length) {
+        const problems: Problem[] = (parsed.problemList ?? []).map((p, i) => ({
+          id: crypto.randomUUID(),
+          order: i,
+          title: p.title,
+          status: 'ativo',
+          linkedGuidelineTopic: null,
+        }));
+        updatedPatient = await savePatient(key, {
+          ...patient,
+          problemList: problems.length ? problems : patient.problemList,
+          allergies: parsed.allergies?.length ? parsed.allergies : patient.allergies,
+        });
+        onPatientUpdated(updatedPatient);
+      }
+
+      const a: Anamnesis = {
+        patientId: patient.id,
+        rawText,
+        structured: { text: clean },
+        createdAt: new Date().toISOString(),
+      };
+      await saveAnamnesis(key, a);
+      setAnamnesis(a);
+      ai.reset();
+      setMode('view');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function salvarEdicao() {
+    if (!key) return;
+    setSaving(true);
+    try {
+      const a: Anamnesis = {
+        patientId: patient.id,
+        rawText: anamnesis?.rawText ?? '',
+        structured: { text: editText },
+        createdAt: anamnesis?.createdAt ?? new Date().toISOString(),
+      };
+      await saveAnamnesis(key, a);
+      setAnamnesis(a);
+      setMode('view');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!loaded) return <p className="text-sm text-muted">Carregando anamnese…</p>;
+
+  return (
+    <div className="card space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2 font-semibold">
+          <FileText className="h-4 w-4 text-brand" /> Anamnese
+        </h2>
+        {mode === 'view' && (
+          <div className="flex gap-1">
+            <button className="btn-ghost px-2 py-1 text-xs" onClick={() => { setEditText(structuredText); setMode('edit'); }}>
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </button>
+            <button className="btn-ghost px-2 py-1 text-xs" onClick={() => { setRaw(''); ai.reset(); setMode('input'); }}>
+              <RefreshCw className="h-3.5 w-3.5" /> Reorganizar
+            </button>
+          </div>
+        )}
+      </div>
+
+      {mode === 'input' && (
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            Cole o texto bruto da admissão/anamnese. Não inclua nome completo, CPF ou nº de prontuário.
+          </p>
+          <textarea
+            className="input min-h-[160px] font-mono text-xs"
+            placeholder="Cole aqui a anamnese/admissão…"
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+          />
+          <button className="btn-primary" disabled={!raw.trim() || ai.loading || saving} onClick={organizar}>
+            <Wand2 className="h-4 w-4" /> {ai.loading ? 'Organizando…' : 'Organizar'}
+          </button>
+          <AiOutput text={ai.text ? stripOrganizerJson(ai.text) : ''} loading={ai.loading} error={ai.error} />
+        </div>
+      )}
+
+      {mode === 'edit' && (
+        <div className="space-y-2">
+          <textarea
+            className="input min-h-[240px] font-mono text-xs"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <button className="btn-primary" disabled={saving} onClick={salvarEdicao}>
+              <Save className="h-4 w-4" /> Salvar
+            </button>
+            <button className="btn-ghost" onClick={() => setMode('view')}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'view' && structuredText && (
+        <div className="space-y-2">
+          <div className="rounded-lg border border-border bg-surface-2 p-3">
+            <Markdown>{structuredText}</Markdown>
+          </div>
+          <CopyButton text={structuredText} label="Copiar anamnese" />
+        </div>
+      )}
+    </div>
+  );
+}

@@ -6,6 +6,8 @@ import { getPatient } from '@/lib/remoteRepo';
 import type { Patient } from '@/lib/types';
 import { diaInternacao, fmtBR } from '@/lib/dates';
 import { ComingSoon, Disclaimer, EmptyState } from '@/components/ui';
+import { AnamneseCard } from '@/features/anamnese/AnamneseCard';
+import { EvolucaoDiaria } from '@/features/evolucao/EvolucaoDiaria';
 
 type TabKey =
   | 'visao'
@@ -57,10 +59,7 @@ export function PatientPage() {
   return (
     <div className="space-y-4">
       <div>
-        <button
-          className="btn-ghost mb-2 px-0 text-sm text-muted"
-          onClick={() => navigate('/pacientes')}
-        >
+        <button className="btn-ghost mb-2 px-0 text-sm text-muted" onClick={() => navigate('/pacientes')}>
           <ArrowLeft className="h-4 w-4" /> Prontuários
         </button>
         <div className="flex flex-wrap items-center gap-2">
@@ -79,7 +78,6 @@ export function PatientPage() {
         </div>
       </div>
 
-      {/* Sub-abas roláveis (seção 6) */}
       <div className="-mx-4 overflow-x-auto px-4">
         <div className="flex w-max gap-1 border-b border-border pb-px">
           {TABS.map((t) => (
@@ -87,9 +85,7 @@ export function PatientPage() {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`whitespace-nowrap rounded-t-lg px-3 py-2 text-sm font-medium transition ${
-                tab === t.key
-                  ? 'border-b-2 border-brand text-brand'
-                  : 'text-muted hover:text-text'
+                tab === t.key ? 'border-b-2 border-brand text-brand' : 'text-muted hover:text-text'
               }`}
             >
               {t.label}
@@ -98,23 +94,33 @@ export function PatientPage() {
         </div>
       </div>
 
-      <TabContent tab={tab} patient={patient} />
+      <TabContent tab={tab} patient={patient} onPatientUpdated={setPatient} />
     </div>
   );
 }
 
-function TabContent({ tab, patient }: { tab: TabKey; patient: Patient }) {
+function TabContent({
+  tab,
+  patient,
+  onPatientUpdated,
+}: {
+  tab: TabKey;
+  patient: Patient;
+  onPatientUpdated: (p: Patient) => void;
+}) {
   const problems = patient.problemList.filter((p) => p.status === 'ativo');
 
   switch (tab) {
     case 'visao':
       return (
         <div className="space-y-3">
+          <AnamneseCard patient={patient} onPatientUpdated={onPatientUpdated} />
+
           <div className="card">
             <h2 className="mb-2 font-semibold">Lista de problemas</h2>
             {problems.length === 0 ? (
               <p className="text-sm text-muted">
-                Ainda sem problemas. Eles serão extraídos da anamnese na Fase 1.
+                Ainda sem problemas. Eles são extraídos automaticamente ao organizar a anamnese.
               </p>
             ) : (
               <ol className="list-decimal space-y-1 pl-5 text-sm">
@@ -124,17 +130,25 @@ function TabContent({ tab, patient }: { tab: TabKey; patient: Patient }) {
               </ol>
             )}
           </div>
+
+          {patient.allergies.length > 0 && (
+            <div className="card">
+              <h2 className="mb-2 font-semibold">Alergias</h2>
+              <div className="flex flex-wrap gap-2">
+                {patient.allergies.map((a) => (
+                  <span key={a} className="chip border-danger/40 text-danger">{a}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <ComingSoon phase="Fase 2">
             Linha do tempo + curvas dos laboratoriais (Hb, Na, Cr, PCR…) e dispositivos.
           </ComingSoon>
         </div>
       );
     case 'evolucao':
-      return (
-        <ComingSoon phase="Fase 1 (MVP)">
-          Chat de evolução diária: "como está o paciente hoje?" → 4 blocos + versão limpa.
-        </ComingSoon>
-      );
+      return <EvolucaoDiaria patient={patient} />;
     case 'diferencial':
       return (
         <div className="space-y-3">

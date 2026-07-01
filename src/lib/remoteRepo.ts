@@ -9,7 +9,7 @@
 
 import { supabase, currentUserId } from './supabase';
 import { decryptJSON, encryptJSON, type Cipher } from './crypto';
-import type { Patient } from './types';
+import type { Patient, Anamnesis, Evolution } from './types';
 
 export type NewPatientInput = {
   label: string;
@@ -116,4 +116,72 @@ export async function wipeMyData(): Promise<void> {
   const userId = await requireUser();
   await supabase.from('patients').delete().eq('user_id', userId);
   await supabase.from('user_crypto').delete().eq('user_id', userId);
+}
+
+// ───────────────────────── Anamnese (uma por paciente) ─────────────────────────
+
+export async function getAnamnesis(key: CryptoKey, patientId: string): Promise<Anamnesis | null> {
+  const { data, error } = await supabase
+    .from('anamneses')
+    .select('enc')
+    .eq('patient_id', patientId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return decryptJSON<Anamnesis>(key, (data as { enc: Cipher }).enc);
+}
+
+export async function saveAnamnesis(key: CryptoKey, anamnesis: Anamnesis): Promise<Anamnesis> {
+  const userId = await requireUser();
+  const enc = await encryptJSON(key, anamnesis);
+  const { error } = await supabase
+    .from('anamneses')
+    .upsert({ patient_id: anamnesis.patientId, user_id: userId, enc });
+  if (error) throw error;
+  return anamnesis;
+}
+
+// ───────────────────────── Evoluções (histórico do paciente) ───────────────────
+
+export async function listEvolutions(key: CryptoKey, patientId: string): Promise<Evolution[]> {
+  const { data, error } = await supabase
+    .from('evolutions')
+    .select('enc')
+    .eq('patient_id', patientId)
+    .order('date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const rows = (data ?? []) as { enc: Cipher }[];
+  return Promise.all(rows.map((r) => decryptJSON<Evolution>(key, r.enc)));
+}
+
+export async function createEvolution(
+  key: CryptoKey,
+  input: { patientId: string; date: string; dailyInput: string; structuredOutput: Record<string, unknown>; cleanVersion: string },
+): Promise<Evolution> {
+  const userId = await requireUser();
+  const evo: Evolution = {
+    id: uuid(),
+    patientId: input.patientId,
+    date: input.date,
+    dailyInput: input.dailyInput,
+    structuredOutput: input.structuredOutput,
+    cleanVersion: input.cleanVersion,
+    createdAt: nowISO(),
+  };
+  const enc = await encryptJSON(key, evo);
+  const { error } = await supabase.from('evolutions').insert({
+    id: evo.id,
+    patient_id: evo.patientId,
+    user_id: userId,
+    date: evo.date,
+    enc,
+  });
+  if (error) throw error;
+  return evo;
+}
+
+export async function deleteEvolution(id: string): Promise<void> {
+  const { error } = await supabase.from('evolutions').delete().eq('id', id);
+  if (error) throw error;
 }
