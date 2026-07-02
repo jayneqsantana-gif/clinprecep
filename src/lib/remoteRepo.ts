@@ -118,6 +118,92 @@ export async function wipeMyData(): Promise<void> {
   await supabase.from('user_crypto').delete().eq('user_id', userId);
 }
 
+// ───────────────────────── Backup / restauração (seção 10.6) ───────────────────
+
+/**
+ * Exporta todos os dados do usuário como JSON. Os payloads clínicos já estão
+ * criptografados (colunas `enc`) — o arquivo de backup é ciphertext e só pode
+ * ser lido com o MESMO PIN usado na criação (o salt/verifier vão junto).
+ */
+export interface BackupFile {
+  app: 'clinprecep';
+  version: 1;
+  exportedAt: string;
+  user_crypto: Record<string, unknown> | null;
+  patients: Record<string, unknown>[];
+  anamneses: Record<string, unknown>[];
+  evolutions: Record<string, unknown>[];
+  lab_results: Record<string, unknown>[];
+  tasks: Record<string, unknown>[];
+  chat_messages: Record<string, unknown>[];
+}
+
+export async function exportAllData(): Promise<BackupFile> {
+  await requireUser();
+  const get = async (table: string) => {
+    const { data, error } = await supabase.from(table).select('*');
+    if (error) throw error;
+    return (data ?? []) as Record<string, unknown>[];
+  };
+  const [uc, patients, anamneses, evolutions, labs, tasks, chats] = await Promise.all([
+    get('user_crypto'),
+    get('patients'),
+    get('anamneses'),
+    get('evolutions'),
+    get('lab_results'),
+    get('tasks'),
+    get('chat_messages'),
+  ]);
+  return {
+    app: 'clinprecep',
+    version: 1,
+    exportedAt: nowISO(),
+    user_crypto: uc[0] ?? null,
+    patients,
+    anamneses,
+    evolutions,
+    lab_results: labs,
+    tasks,
+    chat_messages: chats,
+  };
+}
+
+/**
+ * Restaura um backup: APAGA os dados atuais e insere os do arquivo, reatribuindo
+ * ao usuário logado. Após restaurar, o desbloqueio usa o PIN do backup.
+ */
+export async function importAllData(backup: BackupFile): Promise<void> {
+  const userId = await requireUser();
+  if (backup.app !== 'clinprecep' || backup.version !== 1) {
+    throw new Error('Arquivo de backup inválido.');
+  }
+
+  // Apaga o estado atual (patients cascateia as tabelas-filhas).
+  await supabase.from('patients').delete().eq('user_id', userId);
+  await supabase.from('user_crypto').delete().eq('user_id', userId);
+
+  const own = (rows: Record<string, unknown>[]) => rows.map((r) => ({ ...r, user_id: userId }));
+
+  if (backup.user_crypto) {
+    const { error } = await supabase.from('user_crypto').insert({ ...backup.user_crypto, user_id: userId });
+    if (error) throw error;
+  }
+  // Ordem importa: pacientes antes das tabelas-filhas (FK).
+  const inserts: [string, Record<string, unknown>[]][] = [
+    ['patients', backup.patients],
+    ['anamneses', backup.anamneses],
+    ['evolutions', backup.evolutions],
+    ['lab_results', backup.lab_results],
+    ['tasks', backup.tasks],
+    ['chat_messages', backup.chat_messages],
+  ];
+  for (const [table, rows] of inserts) {
+    if (!rows?.length) continue;
+    const { error } = await supabase.from(table).insert(own(rows));
+    if (error) throw error;
+  }
+}
+
 // ───────────────────────── Anamnese (uma por paciente) ─────────────────────────
 
 export async function getAnamnesis(key: CryptoKey, patientId: string): Promise<Anamnesis | null> {

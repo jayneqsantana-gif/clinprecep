@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/store/auth';
@@ -9,11 +9,14 @@ import { FirstRunTerm } from '@/features/auth/FirstRunTerm';
 import { AuthGate } from '@/features/auth/AuthGate';
 import { PinGate } from '@/features/auth/PinGate';
 import { AppShell } from '@/components/layout/AppShell';
-import { PatientsPage } from '@/pages/PatientsPage';
-import { PatientPage } from '@/pages/PatientPage';
-import { StudyPage } from '@/pages/StudyPage';
-import { CalculatorsPage } from '@/pages/CalculatorsPage';
-import { SettingsPage } from '@/pages/SettingsPage';
+
+// Code-split por rota: cada página vira um chunk carregado sob demanda,
+// deixando o bundle inicial leve (importante no celular durante o round).
+const PatientsPage = lazy(() => import('@/pages/PatientsPage').then((m) => ({ default: m.PatientsPage })));
+const PatientPage = lazy(() => import('@/pages/PatientPage').then((m) => ({ default: m.PatientPage })));
+const StudyPage = lazy(() => import('@/pages/StudyPage').then((m) => ({ default: m.StudyPage })));
+const CalculatorsPage = lazy(() => import('@/pages/CalculatorsPage').then((m) => ({ default: m.CalculatorsPage })));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 
 const Loading = () => (
   <div className="flex h-full items-center justify-center text-muted">Carregando…</div>
@@ -66,15 +69,17 @@ export default function App() {
   // 5. App.
   return (
     <AppShell>
-      <Routes>
-        <Route path="/" element={<Navigate to="/pacientes" replace />} />
-        <Route path="/pacientes" element={<PatientsPage />} />
-        <Route path="/pacientes/:id/*" element={<PatientPage />} />
-        <Route path="/estudo" element={<StudyPage />} />
-        <Route path="/calculadoras" element={<CalculatorsPage />} />
-        <Route path="/config" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/pacientes" replace />} />
-      </Routes>
+      <Suspense fallback={<Loading />}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/pacientes" replace />} />
+          <Route path="/pacientes" element={<PatientsPage />} />
+          <Route path="/pacientes/:id/*" element={<PatientPage />} />
+          <Route path="/estudo" element={<StudyPage />} />
+          <Route path="/calculadoras" element={<CalculatorsPage />} />
+          <Route path="/config" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/pacientes" replace />} />
+        </Routes>
+      </Suspense>
     </AppShell>
   );
 }
