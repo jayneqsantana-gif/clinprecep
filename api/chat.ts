@@ -10,7 +10,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS } from './_agents.js';
 
-export const config = { maxDuration: 60 };
+// Fluid Compute (padrão em projetos novos) permite até 300s no plano Hobby —
+// necessário para os agentes com web search (diretrizes/atualizações).
+export const config = { maxDuration: 300 };
 
 const DEFAULT_MODEL = process.env.CLINPRECEP_MODEL || 'claude-sonnet-5';
 const MODEL_ALLOWLIST = new Set(['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5']);
