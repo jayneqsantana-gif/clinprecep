@@ -3,6 +3,7 @@ import { Activity, Plus, X } from 'lucide-react';
 import { useSession } from '@/store/session';
 import { listLabResults, addLabResult } from '@/lib/remoteRepo';
 import { ANALYTES, flagFor, parseNum, type Flag } from '@/lib/labs';
+import { parseLabText } from '@/lib/labParser';
 import { todayISO } from '@/lib/dates';
 import { Sparkline } from '@/components/Sparkline';
 import type { Patient, LabResult, LabValue } from '@/lib/types';
@@ -16,6 +17,15 @@ export function LabsCard({ patient }: { patient: Patient }) {
   const [date, setDate] = useState(todayISO());
   const [fields, setFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [paste, setPaste] = useState('');
+  const [extraiu, setExtraiu] = useState<number | null>(null);
+
+  function extrair() {
+    const parsed = parseLabText(paste);
+    const n = Object.keys(parsed).length;
+    setExtraiu(n);
+    if (n > 0) setFields((f) => ({ ...f, ...parsed }));
+  }
 
   async function refresh() {
     if (!key) return;
@@ -77,6 +87,25 @@ export function LabsCard({ patient }: { patient: Patient }) {
 
       {adding && (
         <div className="space-y-3 rounded-lg border border-border bg-surface-2 p-3">
+          <div>
+            <label className="label">Colar laudo (opcional)</label>
+            <textarea
+              className="input min-h-[70px] font-mono text-xs"
+              placeholder="Cole o texto dos exames (ex.: Hb 9,2 Na 132 K 5,1 Ureia 80 Cr 2,1 PCR 120 Leuco 15.400 Plaq 90.000)…"
+              value={paste}
+              onChange={(e) => setPaste(e.target.value)}
+            />
+            <div className="mt-1 flex items-center gap-2">
+              <button type="button" className="btn-ghost text-xs" disabled={!paste.trim()} onClick={extrair}>
+                Extrair para os campos
+              </button>
+              {extraiu != null && (
+                <span className="text-xs text-muted">
+                  {extraiu > 0 ? `${extraiu} valor(es) reconhecido(s) — confira abaixo.` : 'Nada reconhecido; preencha manualmente.'}
+                </span>
+              )}
+            </div>
+          </div>
           <div>
             <label className="label">Data da coleta</label>
             <input className="input w-40" type="date" value={date} onChange={(e) => setDate(e.target.value)} />

@@ -48,6 +48,32 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Modo apresentação / impressão: mostra só o resumo, em tema claro. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #apresentacao,
+  #apresentacao * {
+    visibility: visible;
+  }
+  #apresentacao .no-print {
+    display: none !important;
+  }
+  #apresentacao {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    padding: 0;
+    --bg: 255 255 255;
+    --surface: 255 255 255;
+    --surface-2: 245 246 248;
+    --text: 17 24 39;
+    --muted: 80 88 100;
+    --border: 205 210 216;
+  }
+}
+
 @layer components {
   .card {
     @apply rounded-xl border border-border bg-surface p-4 shadow-sm;

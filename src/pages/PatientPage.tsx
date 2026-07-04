@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BedDouble } from 'lucide-react';
+import { ArrowLeft, BedDouble, Presentation } from 'lucide-react';
 import { useSession } from '@/store/session';
 import { getPatient } from '@/lib/remoteRepo';
 import type { Patient } from '@/lib/types';
@@ -16,6 +16,7 @@ import { TimelineCard } from '@/features/labs/TimelineCard';
 import { DiretrizesTab } from '@/features/diretrizes/DiretrizesTab';
 import { AtualizacoesTab } from '@/features/atualizacoes/AtualizacoesTab';
 import { PatientDuvidas } from '@/features/duvidas/PatientDuvidas';
+import { PresentationView } from '@/features/apresentacao/PresentationView';
 
 type TabKey =
   | 'visao'
@@ -42,6 +43,7 @@ export function PatientPage() {
   const navigate = useNavigate();
   const [patient, setPatient] = useState<Patient | null | undefined>(undefined);
   const [tab, setTab] = useState<TabKey>('visao');
+  const [presenting, setPresenting] = useState(false);
 
   useEffect(() => {
     if (!key || !id) return;
@@ -67,9 +69,14 @@ export function PatientPage() {
   return (
     <div className="space-y-4">
       <div>
-        <button className="btn-ghost mb-2 px-0 text-sm text-muted" onClick={() => navigate('/pacientes')}>
-          <ArrowLeft className="h-4 w-4" /> Prontuários
-        </button>
+        <div className="mb-2 flex items-center justify-between">
+          <button className="btn-ghost px-0 text-sm text-muted" onClick={() => navigate('/pacientes')}>
+            <ArrowLeft className="h-4 w-4" /> Prontuários
+          </button>
+          <button className="btn-ghost text-sm" onClick={() => setPresenting(true)}>
+            <Presentation className="h-4 w-4" /> Apresentar
+          </button>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-bold">{patient.label}</h1>
           {di != null && <span className="chip">D.I. {di}</span>}
@@ -103,6 +110,8 @@ export function PatientPage() {
       </div>
 
       <TabContent tab={tab} patient={patient} onPatientUpdated={setPatient} />
+
+      {presenting && <PresentationView patient={patient} onClose={() => setPresenting(false)} />}
     </div>
   );
 }
