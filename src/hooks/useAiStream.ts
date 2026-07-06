@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { askAgent, type AgentName, type Citation } from '@/lib/ai';
+import { askAgent, type AgentName, type Citation, type MsgContent } from '@/lib/ai';
 
 /**
  * Hook para chamar um agente de IA em streaming. Acumula o texto, expõe estado
@@ -15,7 +15,7 @@ export function useAiStream() {
 
   async function run(params: {
     agent: AgentName;
-    messages: { role: 'user' | 'assistant'; content: string }[];
+    messages: { role: 'user' | 'assistant'; content: MsgContent }[];
     systemExtra?: string;
   }): Promise<string | null> {
     abortRef.current?.abort();

@@ -4,6 +4,9 @@ import { useSession } from '@/store/session';
 import { listLabResults, addLabResult } from '@/lib/remoteRepo';
 import { ANALYTES, flagFor, parseNum, type Flag } from '@/lib/labs';
 import { parseLabText } from '@/lib/labParser';
+import { fileToAttachment } from '@/lib/attachments';
+import { useAiStream } from '@/hooks/useAiStream';
+import { AttachButton, AttachmentNotice } from '@/components/Attachments';
 import { todayISO } from '@/lib/dates';
 import { Sparkline } from '@/components/Sparkline';
 import type { Patient, LabResult, LabValue } from '@/lib/types';
@@ -19,12 +22,43 @@ export function LabsCard({ patient }: { patient: Patient }) {
   const [saving, setSaving] = useState(false);
   const [paste, setPaste] = useState('');
   const [extraiu, setExtraiu] = useState<number | null>(null);
+  const trans = useAiStream();
+  const [imgErr, setImgErr] = useState<string | null>(null);
 
   function extrair() {
     const parsed = parseLabText(paste);
     const n = Object.keys(parsed).length;
     setExtraiu(n);
     if (n > 0) setFields((f) => ({ ...f, ...parsed }));
+  }
+
+  async function fromImage(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setImgErr(null);
+    setExtraiu(null);
+    try {
+      const attach = await fileToAttachment(files[0]);
+      const text = await trans.run({
+        agent: 'transcritor',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Transcreva os exames laboratoriais desta imagem/PDF em texto puro.' },
+              attach.block,
+            ],
+          },
+        ],
+      });
+      if (text) {
+        const parsed = parseLabText(text);
+        const n = Object.keys(parsed).length;
+        setExtraiu(n);
+        if (n > 0) setFields((f) => ({ ...f, ...parsed }));
+      }
+    } catch (e) {
+      setImgErr((e as Error).message);
+    }
   }
 
   async function refresh() {
@@ -95,16 +129,21 @@ export function LabsCard({ patient }: { patient: Patient }) {
               value={paste}
               onChange={(e) => setPaste(e.target.value)}
             />
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               <button type="button" className="btn-ghost text-xs" disabled={!paste.trim()} onClick={extrair}>
-                Extrair para os campos
+                Extrair do texto
               </button>
-              {extraiu != null && (
+              <span className="text-xs text-muted">ou</span>
+              <AttachButton onFiles={fromImage} label="Foto/PDF do exame" busy={trans.loading} />
+              {trans.loading && <span className="text-xs text-muted">Lendo a imagem…</span>}
+              {extraiu != null && !trans.loading && (
                 <span className="text-xs text-muted">
                   {extraiu > 0 ? `${extraiu} valor(es) reconhecido(s) — confira abaixo.` : 'Nada reconhecido; preencha manualmente.'}
                 </span>
               )}
+              {(imgErr || trans.error) && <span className="text-xs text-danger">{imgErr || trans.error}</span>}
             </div>
+            <AttachmentNotice />
           </div>
           <div>
             <label className="label">Data da coleta</label>

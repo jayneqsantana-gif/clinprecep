@@ -59,7 +59,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { agent, messages, model, systemExtra } = (req.body ?? {}) as {
     agent?: string;
-    messages?: { role: 'user' | 'assistant'; content: string }[];
+    // content pode ser string ou blocos (texto + imagem/PDF).
+    messages?: { role: 'user' | 'assistant'; content: unknown }[];
     model?: string;
     systemExtra?: string;
   };

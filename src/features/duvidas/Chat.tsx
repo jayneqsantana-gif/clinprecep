@@ -1,14 +1,19 @@
 import { useRef, useState, useEffect } from 'react';
 import { Send, Loader2, ListPlus, ExternalLink, Check } from 'lucide-react';
 import { useAiStream } from '@/hooks/useAiStream';
+import { useAttachments } from '@/hooks/useAttachments';
 import { Markdown } from '@/components/Markdown';
+import { AttachButton, AttachmentList } from '@/components/Attachments';
 import { CopyButton } from '@/components/ui';
-import type { Citation } from '@/lib/ai';
+import { imagesFromPaste } from '@/lib/attachments';
+import type { Citation, MsgContent } from '@/lib/ai';
 
 interface Msg {
   role: 'user' | 'assistant';
   content: string;
   citations?: Citation[];
+  images?: string[];
+  api?: MsgContent;
 }
 
 /**
@@ -25,6 +30,7 @@ export function Chat({
   placeholder?: string;
 }) {
   const ai = useAiStream();
+  const att = useAttachments();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
@@ -34,15 +40,25 @@ export function Chat({
   }, [messages, ai.text]);
 
   async function send() {
-    if (!input.trim() || ai.loading) return;
-    const userMsg: Msg = { role: 'user', content: input.trim() };
+    if ((!input.trim() && att.items.length === 0) || ai.loading) return;
+    const blocks = att.items.map((a) => a.block);
+    const api: MsgContent = blocks.length
+      ? [{ type: 'text', text: input.trim() || 'Analise a imagem anexada.' }, ...blocks]
+      : input.trim();
+    const userMsg: Msg = {
+      role: 'user',
+      content: input.trim() || '(imagem)',
+      images: att.items.filter((a) => a.kind === 'image').map((a) => a.previewUrl),
+      api,
+    };
     const hist = [...messages, userMsg];
     setMessages(hist);
     setInput('');
+    att.clear();
     const result = await ai.run({
       agent: 'duvidas',
       systemExtra: systemExtra?.(),
-      messages: hist.map((m) => ({ role: m.role, content: m.content })),
+      messages: hist.map((m) => ({ role: m.role, content: m.api ?? m.content })),
     });
     if (result != null) {
       setMessages((h) => [...h, { role: 'assistant', content: result, citations: ai.citationsRef.current }]);
@@ -60,8 +76,17 @@ export function Chat({
 
         {messages.map((m, i) =>
           m.role === 'user' ? (
-            <div key={i} className="ml-auto max-w-[85%] rounded-lg rounded-br-sm bg-brand px-3 py-2 text-sm text-brand-fg">
-              {m.content}
+            <div key={i} className="ml-auto max-w-[85%] space-y-2">
+              {m.images && m.images.length > 0 && (
+                <div className="flex flex-wrap justify-end gap-2">
+                  {m.images.map((src, k) => (
+                    <img key={k} src={src} alt="" className="h-24 rounded-lg border border-border object-cover" />
+                  ))}
+                </div>
+              )}
+              {m.content && (
+                <div className="rounded-lg rounded-br-sm bg-brand px-3 py-2 text-sm text-brand-fg">{m.content}</div>
+              )}
             </div>
           ) : (
             <AssistantBubble key={i} msg={m} onSaveTask={onSaveTask} />
@@ -88,23 +113,32 @@ export function Chat({
         <div ref={endRef} />
       </div>
 
-      <div className="sticky bottom-16 flex items-end gap-2 bg-bg/80 py-1 backdrop-blur">
-        <textarea
-          className="input min-h-[44px] flex-1 resize-none"
-          rows={1}
-          placeholder={placeholder ?? 'Escreva sua pergunta…'}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              void send();
-            }
-          }}
-        />
-        <button className="btn-primary" disabled={!input.trim() || ai.loading} onClick={send}>
-          <Send className="h-4 w-4" />
-        </button>
+      <div className="sticky bottom-16 space-y-2 bg-bg/80 py-1 backdrop-blur">
+        {att.items.length > 0 && <AttachmentList items={att.items} onRemove={att.remove} />}
+        {att.error && <p className="text-xs text-danger">{att.error}</p>}
+        <div className="flex items-end gap-2">
+          <AttachButton onFiles={(f) => void att.add(f)} label="" busy={att.busy} />
+          <textarea
+            className="input min-h-[44px] flex-1 resize-none"
+            rows={1}
+            placeholder={placeholder ?? 'Escreva sua pergunta… (pode colar uma imagem)'}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onPaste={(e) => {
+              const imgs = imagesFromPaste(e.nativeEvent);
+              if (imgs.length) void att.add(imgs);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void send();
+              }
+            }}
+          />
+          <button className="btn-primary" disabled={(!input.trim() && att.items.length === 0) || ai.loading} onClick={send}>
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -4,7 +4,10 @@ import { useSession } from '@/store/session';
 import { getAnamnesis, saveAnamnesis, savePatient } from '@/lib/remoteRepo';
 import { buildPatientContext, extractOrganizerJson, stripOrganizerJson } from '@/lib/context';
 import { useAiStream } from '@/hooks/useAiStream';
+import { useAttachments } from '@/hooks/useAttachments';
 import { AiOutput } from '@/components/AiOutput';
+import { AttachButton, AttachmentList, AttachmentNotice } from '@/components/Attachments';
+import { imagesFromPaste, type ContentBlock } from '@/lib/attachments';
 import { Markdown } from '@/components/Markdown';
 import { CopyButton } from '@/components/ui';
 import type { Patient, Anamnesis, Problem } from '@/lib/types';
@@ -23,6 +26,7 @@ export function AnamneseCard({
 }) {
   const key = useSession((s) => s.key);
   const ai = useAiStream();
+  const att = useAttachments();
   const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [raw, setRaw] = useState('');
@@ -43,14 +47,21 @@ export function AnamneseCard({
   const structuredText = (anamnesis?.structured as { text?: string } | undefined)?.text ?? '';
 
   async function organizar() {
-    if (!key || !raw.trim()) return;
+    if (!key || (!raw.trim() && att.items.length === 0)) return;
+    const content = att.items.length
+      ? ([
+          { type: 'text', text: raw.trim() || 'Organize a anamnese/admissão a partir da imagem/PDF anexado.' },
+          ...att.items.map((a) => a.block),
+        ] as ContentBlock[])
+      : raw;
     const result = await ai.run({
       agent: 'organizador',
       systemExtra: buildPatientContext(patient),
-      messages: [{ role: 'user', content: raw }],
+      messages: [{ role: 'user', content }],
     });
     if (!result) return; // erro/abort já tratado pelo AiOutput
     await persistir(result, raw);
+    att.clear();
   }
 
   async function persistir(aiText: string, rawText: string) {
@@ -138,11 +149,25 @@ export function AnamneseCard({
           </p>
           <textarea
             className="input min-h-[160px] font-mono text-xs"
-            placeholder="Cole aqui a anamnese/admissão…"
+            placeholder="Cole aqui a anamnese/admissão (ou anexe/cole uma foto/PDF)…"
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
+            onPaste={(e) => {
+              const imgs = imagesFromPaste(e.nativeEvent);
+              if (imgs.length) void att.add(imgs);
+            }}
           />
-          <button className="btn-primary" disabled={!raw.trim() || ai.loading || saving} onClick={organizar}>
+          <div className="flex flex-wrap items-center gap-2">
+            <AttachButton onFiles={(f) => void att.add(f)} busy={att.busy} />
+            {att.error && <span className="text-xs text-danger">{att.error}</span>}
+          </div>
+          <AttachmentList items={att.items} onRemove={att.remove} />
+          {att.items.length > 0 && <AttachmentNotice />}
+          <button
+            className="btn-primary"
+            disabled={(!raw.trim() && att.items.length === 0) || ai.loading || saving || att.busy}
+            onClick={organizar}
+          >
             <Wand2 className="h-4 w-4" /> {ai.loading ? 'Organizando…' : 'Organizar'}
           </button>
           <AiOutput text={ai.text ? stripOrganizerJson(ai.text) : ''} loading={ai.loading} error={ai.error} />

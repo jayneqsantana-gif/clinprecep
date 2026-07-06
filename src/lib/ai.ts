@@ -4,15 +4,20 @@
  * A chave da Anthropic vive só no servidor — nunca chega aqui.
  */
 import { accessToken } from './supabase';
+import type { ContentBlock } from './attachments';
 
 export type AgentName =
   | 'organizador'
+  | 'transcritor'
   | 'preceptor'
   | 'diferencial'
   | 'diretrizes'
   | 'atualizacoes'
   | 'prescricao'
   | 'duvidas';
+
+/** Conteúdo de uma mensagem: texto simples ou blocos (texto + imagem/PDF). */
+export type MsgContent = string | ContentBlock[];
 
 export interface Citation {
   sourceName: string;
@@ -22,7 +27,7 @@ export interface Citation {
 
 export interface AskParams {
   agent: AgentName;
-  messages: { role: 'user' | 'assistant'; content: string }[];
+  messages: { role: 'user' | 'assistant'; content: MsgContent }[];
   systemExtra?: string;
   model?: string;
   onText: (delta: string) => void;
