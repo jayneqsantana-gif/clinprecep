@@ -93,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const streamBody = {
       model: useModel,
       max_tokens: maxTokens,
-      thinking: { type: 'adaptive' },
+      thinking: { type: cfg.thinking === 'disabled' ? 'disabled' : 'adaptive' },
       output_config: { effort: cfg.effort },
       system,
       tools,

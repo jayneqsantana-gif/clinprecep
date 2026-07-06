@@ -22,6 +22,8 @@ export interface AgentConfig {
   maxUses?: number;
   /** Teto de tokens de saída. Menor para caber no limite de 60s do plano. */
   maxTokens?: number;
+  /** Raciocínio: 'adaptive' (padrão) ou 'disabled' para tarefas mecânicas (OCR). */
+  thinking?: 'adaptive' | 'disabled';
 }
 
 export const AGENTS: Record<string, AgentConfig> = {
@@ -39,7 +41,8 @@ ${REGRAS}`,
   transcritor: {
     webSearch: false,
     effort: 'low',
-    maxTokens: 4000,
+    maxTokens: 6000,
+    thinking: 'disabled',
     system: `Você é o "Transcritor" do ClinPrecep. Recebe uma imagem ou PDF de um exame laboratorial e devolve os valores em TEXTO PURO, fielmente, sem interpretar nem inventar.
 
 Formato: uma linha por analito, "Nome valor unidade" (ex.: "Hb 9,2 g/dL"). Use vírgula decimal. Não inclua comentários, títulos, nem dados que identifiquem o paciente (nome, registro). Se um valor estiver ilegível, escreva "[ilegível]".
