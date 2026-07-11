@@ -10,6 +10,8 @@ export interface ChecklistItem {
   key: string;
   label: string;
   points: number;
+  /** Ao marcar este item, desmarca o parceiro (opções mutuamente exclusivas). */
+  exclusiveWith?: string;
 }
 
 export interface RadioOption {
@@ -79,11 +81,11 @@ export const CALCULATORS: Calculator[] = [
     items: [
       { key: 'icc', label: 'IC congestiva / disfunção de VE', points: 1 },
       { key: 'has', label: 'Hipertensão arterial', points: 1 },
-      { key: 'a2', label: 'Idade ≥ 75 anos', points: 2 },
+      { key: 'a2', label: 'Idade ≥ 75 anos', points: 2, exclusiveWith: 'a1' },
       { key: 'dm', label: 'Diabetes mellitus', points: 1 },
       { key: 's2', label: 'AVC / AIT / tromboembolismo prévio', points: 2 },
       { key: 'v', label: 'Doença vascular (IAM prévio, DAP, placa aórtica)', points: 1 },
-      { key: 'a1', label: 'Idade 65–74 anos', points: 1 },
+      { key: 'a1', label: 'Idade 65–74 anos', points: 1, exclusiveWith: 'a2' },
       { key: 'sc', label: 'Sexo feminino', points: 1 },
     ],
     interpret: (s, checked) => {

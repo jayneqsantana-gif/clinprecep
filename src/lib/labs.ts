@@ -42,6 +42,21 @@ export function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Analitos que são CONTAGENS inteiras (ponto = separador de milhar). */
+const CONTAGENS = new Set(['leuco', 'plaq']);
+
+/**
+ * Parse ciente do analito. Para contagens (leuco/plaq), "15.000" e "15000"
+ * viram 15000 (ponto é milhar). Para decimais, usa parseNum.
+ */
+export function parseAnalyte(key: string, s: string): number | null {
+  if (!CONTAGENS.has(key)) return parseNum(s);
+  const t = s.trim();
+  if (!t) return null;
+  const n = Number(t.replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
 /** Formata número com vírgula decimal (padrão BR). */
 export function fmtNum(n: number): string {
   return n.toLocaleString('pt-BR', { maximumFractionDigits: 2 });

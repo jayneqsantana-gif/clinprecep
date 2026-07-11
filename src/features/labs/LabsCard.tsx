@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, Plus, X } from 'lucide-react';
 import { useSession } from '@/store/session';
 import { listLabResults, addLabResult } from '@/lib/remoteRepo';
-import { ANALYTES, flagFor, parseNum, type Flag } from '@/lib/labs';
+import { ANALYTES, flagFor, parseAnalyte, type Flag } from '@/lib/labs';
 import { parseLabText } from '@/lib/labParser';
 import { fileToAttachment } from '@/lib/attachments';
 import { useAiStream } from '@/hooks/useAiStream';
@@ -88,7 +88,7 @@ export function LabsCard({ patient }: { patient: Patient }) {
     if (!key) return;
     const values: LabValue[] = [];
     for (const a of ANALYTES) {
-      const n = parseNum(fields[a.key] ?? '');
+      const n = parseAnalyte(a.key, fields[a.key] ?? '');
       if (n == null) continue;
       const flag: Flag = flagFor(a, n);
       values.push({ name: a.key, value: String(n), unit: a.unit, flag });

@@ -82,7 +82,12 @@ function Checklist({ calc }: { calc: ChecklistScore }) {
                 onChange={() =>
                   setChecked((prev) => {
                     const n = new Set(prev);
-                    n.has(i.key) ? n.delete(i.key) : n.add(i.key);
+                    if (n.has(i.key)) {
+                      n.delete(i.key);
+                    } else {
+                      n.add(i.key);
+                      if (i.exclusiveWith) n.delete(i.exclusiveWith); // opções exclusivas
+                    }
                     return n;
                   })
                 }

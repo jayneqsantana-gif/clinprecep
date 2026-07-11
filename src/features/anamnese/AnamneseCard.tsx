@@ -71,20 +71,29 @@ export function AnamneseCard({
       const clean = stripOrganizerJson(aiText);
       const parsed = extractOrganizerJson(aiText);
 
-      // Atualiza a lista de problemas e alergias do paciente a partir do JSON.
+      // Mescla problemas e alergias (preserva status "resolvido" e edições manuais;
+      // acrescenta só o que é novo).
       let updatedPatient = patient;
       if (parsed?.problemList?.length || parsed?.allergies?.length) {
-        const problems: Problem[] = (parsed.problemList ?? []).map((p, i) => ({
-          id: crypto.randomUUID(),
-          order: i,
-          title: p.title,
-          status: 'ativo',
-          linkedGuidelineTopic: null,
-        }));
+        const norm = (s: string) => s.trim().toLowerCase();
+        const existentes = patient.problemList;
+        const titulos = new Set(existentes.map((p) => norm(p.title)));
+        const novos: Problem[] = (parsed.problemList ?? [])
+          .filter((p) => p.title && !titulos.has(norm(p.title)))
+          .map((p, i) => ({
+            id: crypto.randomUUID(),
+            order: existentes.length + i,
+            title: p.title,
+            status: 'ativo',
+            linkedGuidelineTopic: null,
+          }));
+        const mergedAllergies = Array.from(
+          new Set([...patient.allergies, ...(parsed.allergies ?? [])].map((a) => a.trim()).filter(Boolean)),
+        );
         updatedPatient = await savePatient(key, {
           ...patient,
-          problemList: problems.length ? problems : patient.problemList,
-          allergies: parsed.allergies?.length ? parsed.allergies : patient.allergies,
+          problemList: [...existentes, ...novos],
+          allergies: mergedAllergies,
         });
         onPatientUpdated(updatedPatient);
       }

@@ -1,8 +1,11 @@
 /** Utilidades de data. D.I. = dia de internação (seção 7.1 / 7.3). */
 
 export function todayISO(): string {
+  // Data LOCAL (não UTC) — evita o "+1 dia" no plantão noturno (após ~21h em
+  // Brasília o toISOString já estaria no dia seguinte, quebrando D.I. e evoluções).
   const d = new Date();
-  return d.toISOString().slice(0, 10);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 /** Dia de internação: D1 = dia da admissão. Retorna null se sem data. */
