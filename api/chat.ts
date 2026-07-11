@@ -110,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     const e = err as { name?: string; message?: string };
     console.error('[api/chat] erro de IA:', e?.name, e?.message);
-    send({ type: 'error', message: 'Falha ao gerar a resposta de IA.', debug: `${e?.name}: ${e?.message}` });
+    send({ type: 'error', message: 'Falha ao gerar a resposta de IA.' });
   } finally {
     res.end();
   }
