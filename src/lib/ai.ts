@@ -11,6 +11,7 @@ export type AgentName =
   | 'laboratorio'
   | 'transcritor'
   | 'preceptor'
+  | 'alta'
   | 'diferencial'
   | 'diretrizes'
   | 'atualizacoes'

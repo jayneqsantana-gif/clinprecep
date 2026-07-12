@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui';
 import { AnamneseCard } from '@/features/anamnese/AnamneseCard';
 import { CaseAnalysisBlocks } from '@/features/anamnese/CaseAnalysisBlocks';
 import { EvolucaoDiaria } from '@/features/evolucao/EvolucaoDiaria';
+import { AltaTab } from '@/features/alta/AltaTab';
 import { DiferencialTab } from '@/features/diferencial/DiferencialTab';
 import { PrescricaoTab } from '@/features/prescricao/PrescricaoTab';
 import { TasksPanel } from '@/features/tarefas/TasksPanel';
@@ -22,6 +23,7 @@ import { BookOpen } from 'lucide-react';
 type TabKey =
   | 'visao'
   | 'evolucao'
+  | 'alta'
   | 'diferencial'
   | 'diretrizes'
   | 'atualizacoes'
@@ -31,6 +33,7 @@ type TabKey =
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'visao', label: 'Visão Geral' },
   { key: 'evolucao', label: 'Evolução' },
+  { key: 'alta', label: 'Alta hospitalar' },
   { key: 'diferencial', label: 'Diferencial' },
   { key: 'diretrizes', label: 'Diretrizes' },
   { key: 'atualizacoes', label: 'Atualizações' },
@@ -190,6 +193,8 @@ function TabContent({
       );
     case 'evolucao':
       return <EvolucaoDiaria patient={patient} onPatientUpdated={onPatientUpdated} />;
+    case 'alta':
+      return <AltaTab patient={patient} />;
     case 'diferencial':
       return <DiferencialTab patient={patient} />;
     case 'diretrizes':
