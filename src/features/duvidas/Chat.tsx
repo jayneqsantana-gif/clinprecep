@@ -2,10 +2,12 @@ import { useRef, useState, useEffect } from 'react';
 import { Send, Loader2, ListPlus, ExternalLink, Check } from 'lucide-react';
 import { useAiStream } from '@/hooks/useAiStream';
 import { useAttachments } from '@/hooks/useAttachments';
+import { useSession } from '@/store/session';
 import { Markdown } from '@/components/Markdown';
 import { AttachButton, AttachmentList } from '@/components/Attachments';
 import { CopyButton } from '@/components/ui';
 import { imagesFromPaste } from '@/lib/attachments';
+import { listChatMessages, saveChatMessage } from '@/lib/remoteRepo';
 import type { Citation, MsgContent } from '@/lib/ai';
 
 interface Msg {
@@ -24,13 +26,17 @@ export function Chat({
   systemExtra,
   onSaveTask,
   placeholder,
+  persist,
 }: {
   systemExtra?: () => string;
   onSaveTask?: (text: string) => Promise<void>;
   placeholder?: string;
+  /** Quando definido, o histórico é salvo/carregado (channel 'duvidas'). */
+  persist?: { patientId: string | null };
 }) {
   const ai = useAiStream();
   const att = useAttachments();
+  const key = useSession((s) => s.key);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
@@ -38,6 +44,17 @@ export function Chat({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, ai.text]);
+
+  // Carrega o histórico salvo (se persistente).
+  useEffect(() => {
+    if (!key || !persist) return;
+    void listChatMessages(key, persist.patientId, 'duvidas').then((rows) => {
+      setMessages(
+        rows.map((r) => ({ role: r.role, content: r.content, citations: r.citations })),
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, persist?.patientId]);
 
   async function send() {
     if ((!input.trim() && att.items.length === 0) || ai.loading) return;
@@ -62,6 +79,22 @@ export function Chat({
     });
     if (result != null) {
       setMessages((h) => [...h, { role: 'assistant', content: result, citations: ai.citationsRef.current }]);
+      if (key && persist) {
+        // Persiste o par pergunta/resposta (texto; imagens não são armazenadas).
+        await saveChatMessage(key, {
+          patientId: persist.patientId,
+          role: 'user',
+          content: userMsg.content,
+          channel: 'duvidas',
+        });
+        await saveChatMessage(key, {
+          patientId: persist.patientId,
+          role: 'assistant',
+          content: result,
+          citations: ai.citationsRef.current,
+          channel: 'duvidas',
+        });
+      }
     }
   }
 

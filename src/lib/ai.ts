@@ -8,13 +8,16 @@ import type { ContentBlock } from './attachments';
 
 export type AgentName =
   | 'organizador'
+  | 'laboratorio'
   | 'transcritor'
   | 'preceptor'
   | 'diferencial'
   | 'diretrizes'
   | 'atualizacoes'
   | 'prescricao'
-  | 'duvidas';
+  | 'duvidas'
+  | 'passagem'
+  | 'plantao';
 
 /** Conteúdo de uma mensagem: texto simples ou blocos (texto + imagem/PDF). */
 export type MsgContent = string | ContentBlock[];

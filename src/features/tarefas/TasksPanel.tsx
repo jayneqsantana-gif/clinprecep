@@ -6,7 +6,7 @@ import { fmtBR } from '@/lib/dates';
 import type { Patient, Task } from '@/lib/types';
 
 /** Pendências do paciente (seção 7 / rede de segurança). */
-export function TasksPanel({ patient }: { patient: Patient }) {
+export function TasksPanel({ patient, refreshKey = 0 }: { patient: Patient; refreshKey?: number }) {
   const key = useSession((s) => s.key);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -22,7 +22,7 @@ export function TasksPanel({ patient }: { patient: Patient }) {
   useEffect(() => {
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, patient.id]);
+  }, [key, patient.id, refreshKey]);
 
   async function add() {
     if (!key || !desc.trim()) return;

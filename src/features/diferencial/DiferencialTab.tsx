@@ -21,7 +21,7 @@ export function DiferencialTab({ patient }: { patient: Patient }) {
       messages: [
         {
           role: 'user',
-          content: `Estruture o diagnóstico diferencial para o problema: "${alvo}". Use as 3 camadas (mais provável / não posso perder / plausível), com raciocínio bayesiano, como diferenciar e como diagnosticar cada hipótese, citando fontes. Seja consciente dos recursos do SUS.`,
+          content: `Faça o diagnóstico diferencial NÃO do rótulo "${alvo}", mas da GRANDE SÍNDROME / do sintoma / da alteração de imagem ou laboratório que levou a ele (ex.: "SCA com supra de ST" → DD de "dor torácica com supra de ST"; "pielonefrite à direita" → DD de "dor lombar direita"). Use as 3 camadas (mais provável / não posso perder / plausível), com raciocínio bayesiano, como diferenciar e como diagnosticar cada hipótese, citando fontes. Consciente dos recursos do SUS.`,
         },
       ],
     });

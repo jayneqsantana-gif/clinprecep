@@ -9,7 +9,7 @@
 
 import { supabase, currentUserId } from './supabase';
 import { decryptJSON, encryptJSON, type Cipher } from './crypto';
-import type { Patient, Anamnesis, Evolution, Task, LabResult, LabValue } from './types';
+import type { Patient, Anamnesis, Evolution, Task, LabResult, LabValue, ChatMessage } from './types';
 
 export type NewPatientInput = {
   label: string;
@@ -371,4 +371,57 @@ export async function addLabResult(
     .insert({ id: uuid(), patient_id: input.patientId, user_id: userId, date: input.date, enc });
   if (error) throw error;
   return lab;
+}
+
+// ───────────────────────── Chat / revisões salvas (chat_messages) ───────────────
+// A tabela chat_messages guarda tanto o tira-dúvidas (channel 'duvidas') quanto as
+// revisões de diretriz salvas (channel 'diretriz'), sempre cifradas em `enc`.
+
+export async function listChatMessages(
+  key: CryptoKey,
+  patientId: string | null,
+  channel = 'duvidas',
+): Promise<ChatMessage[]> {
+  let q = supabase.from('chat_messages').select('enc').order('created_at', { ascending: true });
+  q = patientId ? q.eq('patient_id', patientId) : q.is('patient_id', null);
+  const { data, error } = await q;
+  if (error) throw error;
+  const rows = (data ?? []) as { enc: Cipher }[];
+  const msgs = await Promise.all(rows.map((r) => decryptJSON<ChatMessage>(key, r.enc)));
+  return msgs.filter((m) => (m.channel ?? 'duvidas') === channel);
+}
+
+export async function saveChatMessage(
+  key: CryptoKey,
+  input: {
+    patientId: string | null;
+    role: 'user' | 'assistant';
+    content: string;
+    citations?: { sourceName: string; url: string; type: string }[];
+    channel?: string;
+    topic?: string;
+  },
+): Promise<ChatMessage> {
+  const userId = await requireUser();
+  const msg: ChatMessage = {
+    id: uuid(),
+    patientId: input.patientId,
+    role: input.role,
+    content: input.content,
+    citations: (input.citations ?? []) as ChatMessage['citations'],
+    createdAt: nowISO(),
+    channel: input.channel ?? 'duvidas',
+    topic: input.topic,
+  };
+  const enc = await encryptJSON(key, msg);
+  const row: Record<string, unknown> = { id: msg.id, user_id: userId, enc };
+  if (input.patientId) row.patient_id = input.patientId;
+  const { error } = await supabase.from('chat_messages').insert(row);
+  if (error) throw error;
+  return msg;
+}
+
+export async function deleteChatMessage(id: string): Promise<void> {
+  const { error } = await supabase.from('chat_messages').delete().eq('id', id);
+  if (error) throw error;
 }

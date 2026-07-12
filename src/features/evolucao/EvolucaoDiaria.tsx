@@ -1,36 +1,59 @@
 import { useEffect, useState } from 'react';
-import { Stethoscope, Sparkles, Save, Trash2, ChevronDown, ChevronRight, ClipboardList } from 'lucide-react';
+import { Stethoscope, Sparkles, Save, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useSession } from '@/store/session';
-import { getAnamnesis, listEvolutions, createEvolution, deleteEvolution } from '@/lib/remoteRepo';
-import { buildPatientContext } from '@/lib/context';
+import {
+  getAnamnesis,
+  saveAnamnesis,
+  savePatient,
+  listEvolutions,
+  createEvolution,
+  deleteEvolution,
+  addLabResult,
+  listTasks,
+  createTask,
+} from '@/lib/remoteRepo';
+import {
+  buildPatientContext,
+  parseOrganizerOutput,
+  extractOrganizerJson,
+  extractPendencias,
+  extractLabs,
+} from '@/lib/context';
 import { useAiStream } from '@/hooks/useAiStream';
+import { useAttachments } from '@/hooks/useAttachments';
 import { AiOutput } from '@/components/AiOutput';
+import { AttachButton, AttachmentList, AttachmentNotice } from '@/components/Attachments';
+import { CaseAnalysisBlocks } from '@/features/anamnese/CaseAnalysisBlocks';
 import { Markdown } from '@/components/Markdown';
 import { CopyButton, Disclaimer } from '@/components/ui';
+import { imagesFromPaste, type ContentBlock } from '@/lib/attachments';
 import { todayISO, fmtBR, diaInternacao } from '@/lib/dates';
-import type { Patient, Anamnesis, Evolution } from '@/lib/types';
+import type { Patient, Anamnesis, Evolution, Problem } from '@/lib/types';
 
-const CLEAN_PROMPT =
-  'Gere agora a "versão limpa" da evolução acima: apenas a evolução padronizada (bloco 1), em prosa corrida, sem títulos com "#", sem marcadores e sem comentários — pronta para colar no prontuário.';
+const PLACEHOLDER =
+  'Escreva aqui como está seu paciente hoje, anexe a prescrição do dia, descreva alterações no exame físico e os sinais vitais das últimas 24h…';
 
-export function EvolucaoDiaria({ patient }: { patient: Patient }) {
+export function EvolucaoDiaria({
+  patient,
+  onPatientUpdated,
+}: {
+  patient: Patient;
+  onPatientUpdated?: (p: Patient) => void;
+}) {
   const key = useSession((s) => s.key);
   const gen = useAiStream();
-  const clean = useAiStream();
+  const att = useAttachments();
 
   const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
   const [history, setHistory] = useState<Evolution[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [dailyInput, setDailyInput] = useState('');
-  const [cleanText, setCleanText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savedAnalysis, setSavedAnalysis] = useState('');
 
   async function refresh() {
     if (!key) return;
-    const [a, evos] = await Promise.all([
-      getAnamnesis(key, patient.id),
-      listEvolutions(key, patient.id),
-    ]);
+    const [a, evos] = await Promise.all([getAnamnesis(key, patient.id), listEvolutions(key, patient.id)]);
     setAnamnesis(a);
     setHistory(evos);
     setLoaded(true);
@@ -44,46 +67,104 @@ export function EvolucaoDiaria({ patient }: { patient: Patient }) {
   const context = () => buildPatientContext(patient, anamnesis, history[0] ?? null);
 
   async function gerar() {
-    if (!key || !dailyInput.trim()) return;
-    setCleanText('');
-    clean.reset();
+    if (!key || (!dailyInput.trim() && att.items.length === 0)) return;
+    setSavedAnalysis('');
+    const texto =
+      `Cenário: ${patient.setting}. Atualização de hoje (${fmtBR(todayISO())}):\n` +
+      (dailyInput.trim() || 'Atualize a evolução a partir dos exames/prescrição anexados.');
+    const content: string | ContentBlock[] = att.items.length
+      ? [{ type: 'text', text: texto }, ...att.items.map((a) => a.block)]
+      : texto;
     await gen.run({
       agent: 'preceptor',
       systemExtra: context(),
-      messages: [{ role: 'user', content: dailyInput }],
+      messages: [{ role: 'user', content }],
     });
   }
 
-  async function gerarLimpa() {
-    if (!gen.text) return;
-    const result = await clean.run({
-      agent: 'preceptor',
-      systemExtra: context(),
-      messages: [
-        { role: 'user', content: dailyInput },
-        { role: 'assistant', content: gen.text },
-        { role: 'user', content: CLEAN_PROMPT },
-      ],
-    });
-    if (result) setCleanText(result);
+  /** Atualiza a lista de problemas do paciente a partir do <json> do preceptor. */
+  async function aplicarProblemas(aiText: string): Promise<Patient> {
+    const parsed = extractOrganizerJson(aiText);
+    if (!key || !parsed?.problemList?.length) return patient;
+    const norm = (s: string) => s.trim().toLowerCase();
+    const atuais = [...patient.problemList];
+    for (const p of parsed.problemList) {
+      if (!p.title) continue;
+      const idx = atuais.findIndex((x) => norm(x.title) === norm(p.title));
+      const status = p.status === 'resolvido' ? 'resolvido' : 'ativo';
+      if (idx >= 0) {
+        atuais[idx] = { ...atuais[idx], status };
+      } else {
+        const novo: Problem = {
+          id: crypto.randomUUID(),
+          order: atuais.length,
+          title: p.title,
+          status,
+          linkedGuidelineTopic: null,
+        };
+        atuais.push(novo);
+      }
+    }
+    const updated = await savePatient(key, { ...patient, problemList: atuais });
+    onPatientUpdated?.(updated);
+    return updated;
+  }
+
+  /** Salva os laboratórios do dia (<labs>) na curva. */
+  async function aplicarLabs(aiText: string) {
+    if (!key) return;
+    for (const lab of extractLabs(aiText)) {
+      if (!lab.date || !lab.values?.length) continue;
+      await addLabResult(key, {
+        patientId: patient.id,
+        date: lab.date,
+        values: lab.values.map((v) => ({ name: v.name, value: v.value, unit: v.unit ?? '', flag: v.flag ?? null })),
+      });
+    }
+  }
+
+  /** Cria pendências novas do dia (<pendencias>), sem duplicar. */
+  async function aplicarPendencias(aiText: string) {
+    if (!key) return;
+    const itens = extractPendencias(aiText);
+    if (!itens.length) return;
+    const existentes = await listTasks(key, patient.id);
+    const norm = (s: string) => s.trim().toLowerCase();
+    const jaTem = new Set(existentes.map((t) => norm(t.description)));
+    for (const d of itens.filter((x) => !jaTem.has(norm(x)))) {
+      await createTask(key, { patientId: patient.id, description: d, urgent: false, dueDate: null });
+    }
   }
 
   async function salvar() {
     if (!key || !gen.text) return;
     setSaving(true);
     try {
+      const { anamnese, analysis } = parseOrganizerOutput(gen.text);
+      // 1) salva a evolução no histórico
       await createEvolution(key, {
         patientId: patient.id,
         date: todayISO(),
         dailyInput,
-        structuredOutput: { text: gen.text },
-        cleanVersion: cleanText,
+        structuredOutput: { text: anamnese, analysis },
+        cleanVersion: '',
       });
-      // Limpa o formulário e recarrega o histórico.
+      // 2) atualiza a anamnese "viva" do paciente (mantém tudo em sincronia)
+      await saveAnamnesis(key, {
+        patientId: patient.id,
+        rawText: anamnesis?.rawText ?? '',
+        structured: { text: anamnese, analysis },
+        createdAt: anamnesis?.createdAt ?? new Date().toISOString(),
+      });
+      // 3) reflete problemas, labs e pendências automaticamente
+      await aplicarProblemas(gen.text);
+      await aplicarLabs(gen.text);
+      await aplicarPendencias(gen.text);
+
+      setSavedAnalysis(analysis);
       setDailyInput('');
-      setCleanText('');
+      att.clear();
       gen.reset();
-      clean.reset();
       await refresh();
     } finally {
       setSaving(false);
@@ -91,6 +172,7 @@ export function EvolucaoDiaria({ patient }: { patient: Patient }) {
   }
 
   const di = diaInternacao(patient.admissionDate);
+  const live = gen.text ? parseOrganizerOutput(gen.text) : { anamnese: '', analysis: '' };
 
   return (
     <div className="space-y-4">
@@ -103,38 +185,52 @@ export function EvolucaoDiaria({ patient }: { patient: Patient }) {
         </div>
         <textarea
           className="input min-h-[120px] text-sm"
-          placeholder="Escreva a atualização do dia + novos exames/SSVV…"
+          placeholder={PLACEHOLDER}
           value={dailyInput}
           onChange={(e) => setDailyInput(e.target.value)}
+          onPaste={(e) => {
+            const imgs = imagesFromPaste(e.nativeEvent);
+            if (imgs.length) void att.add(imgs);
+          }}
         />
-        <button className="btn-primary" disabled={!dailyInput.trim() || gen.loading || saving} onClick={gerar}>
+        <div className="flex flex-wrap items-center gap-2">
+          <AttachButton onFiles={(f) => void att.add(f)} label="+ novos exames" busy={att.busy} />
+          {att.error && <span className="text-xs text-danger">{att.error}</span>}
+        </div>
+        <AttachmentList items={att.items} onRemove={att.remove} />
+        {att.items.length > 0 && <AttachmentNotice />}
+
+        <button
+          className="btn-primary"
+          disabled={(!dailyInput.trim() && att.items.length === 0) || gen.loading || saving || att.busy}
+          onClick={gerar}
+        >
           <Sparkles className="h-4 w-4" /> {gen.loading ? 'Gerando…' : 'Gerar evolução'}
         </button>
 
-        <AiOutput text={gen.text} loading={gen.loading} error={gen.error} />
+        {/* Anamnese/evolução atualizada, pronta para copiar */}
+        {gen.loading || gen.error ? (
+          <AiOutput text={live.anamnese} loading={gen.loading} error={gen.error} copyText={live.anamnese} />
+        ) : (
+          live.anamnese && (
+            <div className="space-y-2">
+              <div className="rounded-lg border border-border bg-surface-2 p-3">
+                <Markdown>{live.anamnese}</Markdown>
+              </div>
+              <CopyButton text={live.anamnese} label="Copiar evolução" />
+            </div>
+          )
+        )}
 
         {gen.text && !gen.loading && (
-          <div className="space-y-3 border-t border-border pt-3">
-            <div className="flex flex-wrap gap-2">
-              <button className="btn-ghost" disabled={clean.loading} onClick={gerarLimpa}>
-                <ClipboardList className="h-4 w-4" /> {clean.loading ? 'Gerando…' : 'Gerar versão limpa'}
-              </button>
-              <button className="btn-primary" disabled={saving} onClick={salvar}>
-                <Save className="h-4 w-4" /> Salvar no histórico
-              </button>
-            </div>
-
-            {(clean.text || cleanText) && (
-              <div className="space-y-2 rounded-lg border border-ok/40 bg-ok/5 p-3">
-                <p className="text-xs font-semibold text-ok">Versão limpa (para o prontuário)</p>
-                <Markdown>{cleanText || clean.text}</Markdown>
-                {!clean.loading && <CopyButton text={cleanText || clean.text} label="Copiar versão limpa" />}
-              </div>
-            )}
-            {clean.error && <AiOutput text="" loading={false} error={clean.error} />}
-          </div>
+          <button className="btn-primary" disabled={saving} onClick={salvar}>
+            <Save className="h-4 w-4" /> {saving ? 'Salvando…' : 'Salvar evolução e gerar análise do caso'}
+          </button>
         )}
       </div>
+
+      {/* Análise do caso (blocos 2/3/4) — ao vivo durante a geração, ou salva */}
+      <CaseAnalysisBlocks analysis={savedAnalysis || live.analysis} />
 
       <div className="space-y-2">
         <h2 className="font-semibold">Histórico de evoluções</h2>
@@ -152,7 +248,9 @@ export function EvolucaoDiaria({ patient }: { patient: Patient }) {
 
 function EvolutionItem({ evo, onDeleted }: { evo: Evolution; onDeleted: () => void }) {
   const [open, setOpen] = useState(false);
-  const full = (evo.structuredOutput as { text?: string } | undefined)?.text ?? '';
+  const out = evo.structuredOutput as { text?: string; analysis?: string } | undefined;
+  const full = out?.text ?? '';
+  const analysis = out?.analysis ?? '';
   const copyText = evo.cleanVersion || full;
   return (
     <div className="card">
@@ -160,7 +258,6 @@ function EvolutionItem({ evo, onDeleted }: { evo: Evolution; onDeleted: () => vo
         <button className="flex flex-1 items-center gap-2 text-left" onClick={() => setOpen((v) => !v)}>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           <span className="font-medium">{fmtBR(evo.date)}</span>
-          {evo.cleanVersion && <span className="chip text-[10px]">versão limpa</span>}
         </button>
         <CopyButton text={copyText} label="Copiar" />
         <button
@@ -177,18 +274,13 @@ function EvolutionItem({ evo, onDeleted }: { evo: Evolution; onDeleted: () => vo
       </div>
       {open && (
         <div className="mt-3 space-y-3 border-t border-border pt-3">
-          {evo.cleanVersion && (
-            <div className="rounded-lg border border-ok/40 bg-ok/5 p-3">
-              <p className="mb-1 text-xs font-semibold text-ok">Versão limpa</p>
-              <Markdown>{evo.cleanVersion}</Markdown>
-            </div>
-          )}
           {full && (
             <div>
-              <p className="mb-1 text-xs font-semibold text-muted">Completa (4 blocos)</p>
+              <p className="mb-1 text-xs font-semibold text-muted">Anamnese/evolução</p>
               <Markdown>{full}</Markdown>
             </div>
           )}
+          {analysis && <CaseAnalysisBlocks analysis={analysis} />}
         </div>
       )}
     </div>

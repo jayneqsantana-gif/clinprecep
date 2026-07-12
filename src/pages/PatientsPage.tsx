@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, Search, BedDouble, AlertTriangle } from 'lucide-react';
+import { Plus, Users, Search, BedDouble, AlertTriangle, FlaskConical, Printer, FileText } from 'lucide-react';
 import { useSession } from '@/store/session';
 import {
   createPatient,
@@ -11,9 +11,13 @@ import {
   type NewPatientInput,
 } from '@/lib/remoteRepo';
 import type { Patient, PatientSetting } from '@/lib/types';
-import { SETTING_LABEL } from '@/lib/types';
+import { SETTING_LABEL, SETTINGS_ORDER } from '@/lib/types';
 import { diaInternacao } from '@/lib/dates';
 import { EmptyState, Modal } from '@/components/ui';
+import { GenderIcon } from '@/components/GenderIcon';
+import { TranscreverLabModal } from '@/features/passagem/TranscreverLabModal';
+import { PassagemCasoModal } from '@/features/passagem/PassagemCasoModal';
+import { PassagemPlantaoModal } from '@/features/passagem/PassagemPlantaoModal';
 
 export function PatientsPage() {
   const key = useSession((s) => s.key);
@@ -25,6 +29,9 @@ export function PatientsPage() {
   const [adding, setAdding] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [cenario, setCenario] = useState<PatientSetting | 'todos'>('todos');
+  const [transcrevendo, setTranscrevendo] = useState(false);
+  const [plantao, setPlantao] = useState(false);
+  const [passeCaso, setPasseCaso] = useState<Patient | null>(null);
 
   async function refresh() {
     if (!key) return;
@@ -54,18 +61,26 @@ export function PatientsPage() {
   }, [patients, query, cenario]);
 
   const contagemCenario = useMemo(() => {
-    const c: Record<string, number> = { todos: patients.length, enfermaria: 0, uti: 0, ambulatorio: 0 };
+    const c: Record<string, number> = { todos: patients.length, enfermaria: 0, uti: 0, ambulatorio: 0, psf: 0 };
     for (const p of patients) c[p.setting] = (c[p.setting] ?? 0) + 1;
     return c;
   }, [patients]);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Prontuários</h1>
-        <button className="btn-primary" onClick={() => setAdding(true)}>
-          <Plus className="h-4 w-4" /> Paciente
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-primary" onClick={() => setAdding(true)}>
+            <Plus className="h-4 w-4" /> Paciente
+          </button>
+          <button className="btn-ghost border border-border" onClick={() => setPlantao(true)}>
+            <Printer className="h-4 w-4" /> Gerar passagem de plantão
+          </button>
+          <button className="btn-ghost border border-border" onClick={() => setTranscrevendo(true)}>
+            <FlaskConical className="h-4 w-4" /> Transcrever laboratório
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
@@ -89,7 +104,7 @@ export function PatientsPage() {
       {/* Abas por cenário */}
       <div className="-mx-4 overflow-x-auto px-4">
         <div className="flex w-max gap-1 border-b border-border pb-px">
-          {(['todos', 'enfermaria', 'uti', 'ambulatorio'] as const).map((c) => (
+          {(['todos', ...SETTINGS_ORDER] as const).map((c) => (
             <button
               key={c}
               onClick={() => setCenario(c)}
@@ -118,13 +133,14 @@ export function PatientsPage() {
           }
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {filtered.map((p) => (
             <PatientCard
               key={p.id}
               patient={p}
               openTasks={counts[p.id] ?? 0}
               onOpen={() => navigate(`/pacientes/${p.id}`)}
+              onPasse={() => setPasseCaso(p)}
               onArchive={async () => {
                 if (!key) return;
                 await archivePatient(key, p.id, p.active);
@@ -156,6 +172,10 @@ export function PatientsPage() {
           }}
         />
       )}
+
+      {transcrevendo && <TranscreverLabModal onClose={() => setTranscrevendo(false)} />}
+      {plantao && <PassagemPlantaoModal patients={patients} onClose={() => setPlantao(false)} />}
+      {passeCaso && <PassagemCasoModal patient={passeCaso} onClose={() => setPasseCaso(null)} />}
     </div>
   );
 }
@@ -164,12 +184,14 @@ function PatientCard({
   patient,
   openTasks,
   onOpen,
+  onPasse,
   onArchive,
   onDelete,
 }: {
   patient: Patient;
   openTasks: number;
   onOpen: () => void;
+  onPasse: () => void;
   onArchive: () => void;
   onDelete: () => void;
 }) {
@@ -178,7 +200,9 @@ function PatientCard({
     <div className="card flex flex-col gap-3">
       <button className="flex-1 text-left" onClick={onOpen}>
         <div className="flex items-start justify-between gap-2">
-          <span className="font-semibold">{patient.label}</span>
+          <span className="flex items-center gap-1.5 font-semibold">
+            <GenderIcon sex={patient.sex} /> {patient.label}
+          </span>
           {openTasks > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 text-xs font-medium text-warn">
               <AlertTriangle className="h-3 w-3" /> {openTasks}
@@ -187,7 +211,6 @@ function PatientCard({
         </div>
         <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted">
           {patient.age != null && <span>{patient.age}a</span>}
-          {patient.sex && <span>{patient.sex}</span>}
           {patient.bed && (
             <span className="inline-flex items-center gap-1">
               <BedDouble className="h-3 w-3" /> {patient.bed}
@@ -197,11 +220,17 @@ function PatientCard({
           <span className="chip">{SETTING_LABEL[patient.setting]}</span>
         </div>
       </button>
-      <div className="flex gap-2 border-t border-border pt-2 text-xs">
-        <button className="btn-ghost px-2 py-1" onClick={onArchive}>
+      <div className="grid grid-cols-2 gap-1.5 border-t border-border pt-2 text-xs">
+        <button className="btn-ghost justify-center px-2 py-1" onClick={onOpen}>
+          <FileText className="h-3.5 w-3.5" /> Abrir prontuário
+        </button>
+        <button className="btn-ghost justify-center px-2 py-1" onClick={onPasse}>
+          <FlaskConical className="h-3.5 w-3.5" /> Passe o caso
+        </button>
+        <button className="btn-ghost justify-center px-2 py-1" onClick={onArchive}>
           {patient.active ? 'Arquivar' : 'Reativar'}
         </button>
-        <button className="btn-ghost px-2 py-1 text-danger" onClick={onDelete}>
+        <button className="btn-ghost justify-center px-2 py-1 text-danger" onClick={onDelete}>
           Remover
         </button>
       </div>
@@ -306,6 +335,7 @@ function AddPatientModal({
               <option value="enfermaria">Enfermaria</option>
               <option value="uti">UTI</option>
               <option value="ambulatorio">Ambulatório</option>
+              <option value="psf">PSF</option>
             </select>
             <p className="mt-1 text-xs text-muted">Define o estilo da anamnese e da evolução.</p>
           </div>

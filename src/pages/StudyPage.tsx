@@ -12,7 +12,7 @@ export function StudyPage() {
       <p className="text-sm text-muted">
         Chat de estudo, sem paciente vinculado. Respostas com evidência e citações; quando incerto, sinaliza.
       </p>
-      <Chat placeholder="Ex.: quando iniciar anticoagulação na FA?" />
+      <Chat placeholder="Ex.: quando iniciar anticoagulação na FA?" persist={{ patientId: null }} />
     </div>
   );
 }

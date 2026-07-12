@@ -9,13 +9,16 @@ export type ISODateTime = string; // ISO 8601
 export type ProblemStatus = 'ativo' | 'resolvido';
 
 /** Cenário de internação — define o estilo da anamnese. */
-export type PatientSetting = 'enfermaria' | 'uti' | 'ambulatorio';
+export type PatientSetting = 'enfermaria' | 'uti' | 'ambulatorio' | 'psf';
 
 export const SETTING_LABEL: Record<PatientSetting, string> = {
   enfermaria: 'Enfermaria',
   uti: 'UTI',
   ambulatorio: 'Ambulatório',
+  psf: 'PSF',
 };
+
+export const SETTINGS_ORDER: PatientSetting[] = ['enfermaria', 'uti', 'ambulatorio', 'psf'];
 
 export interface Problem {
   id: string;
@@ -95,6 +98,10 @@ export interface ChatMessage {
   content: string;
   citations: Citation[];
   createdAt: ISODateTime;
+  /** Canal lógico: 'duvidas' (chat) | 'diretriz' (revisão salva). Default 'duvidas'. */
+  channel?: string;
+  /** Para 'diretriz': o tópico/problema revisado. */
+  topic?: string;
 }
 
 /** Preferências e estado do app (não-PHI). */

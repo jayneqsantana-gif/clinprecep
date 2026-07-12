@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Wand2, Save, Pencil, RefreshCw, FileText, Stethoscope } from 'lucide-react';
 import { useSession } from '@/store/session';
-import { getAnamnesis, saveAnamnesis, savePatient } from '@/lib/remoteRepo';
+import { getAnamnesis, saveAnamnesis, savePatient, listTasks, createTask } from '@/lib/remoteRepo';
 import {
   buildPatientContext,
   extractOrganizerJson,
+  extractPendencias,
   parseOrganizerOutput,
 } from '@/lib/context';
 import { SETTING_LABEL } from '@/lib/types';
@@ -25,9 +26,15 @@ import type { Patient, Anamnesis, Problem } from '@/lib/types';
 export function AnamneseCard({
   patient,
   onPatientUpdated,
+  onAnalysis,
+  onTasksChanged,
 }: {
   patient: Patient;
   onPatientUpdated: (p: Patient) => void;
+  /** Eleva a análise clínica salva (blocos 2/3/4) para a página renderizar abaixo. */
+  onAnalysis?: (analysis: string) => void;
+  /** Avisa a página que as pendências mudaram (para recarregar o painel). */
+  onTasksChanged?: () => void;
 }) {
   const key = useSession((s) => s.key);
   const ai = useAiStream();
@@ -45,6 +52,7 @@ export function AnamneseCard({
       setAnamnesis(a);
       setMode(a ? 'view' : 'input');
       setLoaded(true);
+      onAnalysis?.((a?.structured as { analysis?: string } | undefined)?.analysis ?? '');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, patient.id]);
@@ -52,6 +60,21 @@ export function AnamneseCard({
   const structured = anamnesis?.structured as { text?: string; analysis?: string } | undefined;
   const structuredText = structured?.text ?? '';
   const analysisText = structured?.analysis ?? '';
+
+  /** Cria pendências novas a partir do que a IA inferiu do caso (sem duplicar). */
+  async function autoPendencias(aiText: string) {
+    if (!key) return;
+    const itens = extractPendencias(aiText);
+    if (!itens.length) return;
+    const existentes = await listTasks(key, patient.id);
+    const norm = (s: string) => s.trim().toLowerCase();
+    const jaTem = new Set(existentes.map((t) => norm(t.description)));
+    const novas = itens.filter((d) => !jaTem.has(norm(d)));
+    for (const d of novas) {
+      await createTask(key, { patientId: patient.id, description: d, urgent: false, dueDate: null });
+    }
+    if (novas.length) onTasksChanged?.();
+  }
 
   async function organizar() {
     if (!key || (!raw.trim() && att.items.length === 0)) return;
@@ -115,6 +138,8 @@ export function AnamneseCard({
       };
       await saveAnamnesis(key, a);
       setAnamnesis(a);
+      onAnalysis?.(analysis);
+      await autoPendencias(aiText);
       ai.reset();
       setMode('view');
     } finally {
@@ -229,21 +254,14 @@ export function AnamneseCard({
       )}
 
       {mode === 'view' && structuredText && (
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <div className="rounded-lg border border-border bg-surface-2 p-3">
-              <Markdown>{structuredText}</Markdown>
-            </div>
-            <CopyButton text={structuredText} label="Copiar anamnese" />
+        <div className="space-y-2">
+          <div className="rounded-lg border border-border bg-surface-2 p-3">
+            <Markdown>{structuredText}</Markdown>
           </div>
-          {analysisText && (
-            <div className="space-y-2 rounded-lg border border-brand/30 bg-brand/5 p-3">
-              <p className="flex items-center gap-2 text-sm font-semibold text-brand">
-                <Stethoscope className="h-4 w-4" /> Análise clínica (IA)
-              </p>
-              <Markdown>{analysisText}</Markdown>
-            </div>
-          )}
+          <p className="text-xs text-muted">
+            Trechos em <strong>negrito</strong> foram complementados/presumidos pela IA — confirme antes de transcrever.
+          </p>
+          <CopyButton text={structuredText} label="Copiar anamnese" />
         </div>
       )}
     </div>

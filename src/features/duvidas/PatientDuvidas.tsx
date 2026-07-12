@@ -18,6 +18,7 @@ export function PatientDuvidas({ patient }: { patient: Patient }) {
       <Chat
         systemExtra={context}
         placeholder="Pergunte sobre este paciente…"
+        persist={{ patientId: patient.id }}
         onSaveTask={async (desc) => {
           if (!key) return;
           await createTask(key, { patientId: patient.id, description: desc, urgent: false, dueDate: null });

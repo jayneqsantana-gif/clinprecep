@@ -7,16 +7,17 @@ import type { Patient } from '@/lib/types';
 import { diaInternacao, fmtBR } from '@/lib/dates';
 import { EmptyState } from '@/components/ui';
 import { AnamneseCard } from '@/features/anamnese/AnamneseCard';
+import { CaseAnalysisBlocks } from '@/features/anamnese/CaseAnalysisBlocks';
 import { EvolucaoDiaria } from '@/features/evolucao/EvolucaoDiaria';
 import { DiferencialTab } from '@/features/diferencial/DiferencialTab';
 import { PrescricaoTab } from '@/features/prescricao/PrescricaoTab';
 import { TasksPanel } from '@/features/tarefas/TasksPanel';
-import { LabsCard } from '@/features/labs/LabsCard';
-import { TimelineCard } from '@/features/labs/TimelineCard';
 import { DiretrizesTab } from '@/features/diretrizes/DiretrizesTab';
 import { AtualizacoesTab } from '@/features/atualizacoes/AtualizacoesTab';
 import { PatientDuvidas } from '@/features/duvidas/PatientDuvidas';
 import { PresentationView } from '@/features/apresentacao/PresentationView';
+import { GenderIcon } from '@/components/GenderIcon';
+import { BookOpen } from 'lucide-react';
 
 type TabKey =
   | 'visao'
@@ -44,6 +45,12 @@ export function PatientPage() {
   const [patient, setPatient] = useState<Patient | null | undefined>(undefined);
   const [tab, setTab] = useState<TabKey>('visao');
   const [presenting, setPresenting] = useState(false);
+  const [diretrizTopic, setDiretrizTopic] = useState('');
+
+  function revisarTema(topic: string) {
+    setDiretrizTopic(topic);
+    setTab('diretrizes');
+  }
 
   useEffect(() => {
     if (!key || !id) return;
@@ -81,9 +88,9 @@ export function PatientPage() {
           <h1 className="text-xl font-bold">{patient.label}</h1>
           {di != null && <span className="chip">D.I. {di}</span>}
         </div>
-        <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
           {patient.age != null && <span>{patient.age} anos</span>}
-          {patient.sex && <span>{patient.sex}</span>}
+          {patient.sex && <GenderIcon sex={patient.sex} className="text-sm" />}
           {patient.bed && (
             <span className="inline-flex items-center gap-1">
               <BedDouble className="h-3 w-3" /> {patient.bed}
@@ -109,7 +116,13 @@ export function PatientPage() {
         </div>
       </div>
 
-      <TabContent tab={tab} patient={patient} onPatientUpdated={setPatient} />
+      <TabContent
+        tab={tab}
+        patient={patient}
+        onPatientUpdated={setPatient}
+        diretrizTopic={diretrizTopic}
+        onRevisarTema={revisarTema}
+      />
 
       {presenting && <PresentationView patient={patient} onClose={() => setPresenting(false)} />}
     </div>
@@ -120,18 +133,29 @@ function TabContent({
   tab,
   patient,
   onPatientUpdated,
+  diretrizTopic,
+  onRevisarTema,
 }: {
   tab: TabKey;
   patient: Patient;
   onPatientUpdated: (p: Patient) => void;
+  diretrizTopic: string;
+  onRevisarTema: (topic: string) => void;
 }) {
+  const [analysis, setAnalysis] = useState('');
+  const [tasksKey, setTasksKey] = useState(0);
   const problems = patient.problemList.filter((p) => p.status === 'ativo');
 
   switch (tab) {
     case 'visao':
       return (
         <div className="space-y-3">
-          <AnamneseCard patient={patient} onPatientUpdated={onPatientUpdated} />
+          <AnamneseCard
+            patient={patient}
+            onPatientUpdated={onPatientUpdated}
+            onAnalysis={setAnalysis}
+            onTasksChanged={() => setTasksKey((k) => k + 1)}
+          />
 
           <div className="card">
             <h2 className="mb-2 font-semibold">Lista de problemas</h2>
@@ -140,36 +164,36 @@ function TabContent({
                 Ainda sem problemas. Eles são extraídos automaticamente ao organizar a anamnese.
               </p>
             ) : (
-              <ol className="list-decimal space-y-1 pl-5 text-sm">
-                {problems.map((p) => (
-                  <li key={p.id}>{p.title}</li>
+              <ul className="space-y-1.5 text-sm">
+                {problems.map((p, i) => (
+                  <li key={p.id} className="flex items-start justify-between gap-2">
+                    <span>
+                      <span className="text-muted">{i + 1}.</span> {p.title}
+                    </span>
+                    <button
+                      className="btn-ghost shrink-0 px-2 py-0.5 text-xs"
+                      onClick={() => onRevisarTema(p.title)}
+                      title="Abrir revisão da diretriz sobre este tema"
+                    >
+                      <BookOpen className="h-3.5 w-3.5" /> Revisar tema
+                    </button>
+                  </li>
                 ))}
-              </ol>
+              </ul>
             )}
           </div>
 
-          {patient.allergies.length > 0 && (
-            <div className="card">
-              <h2 className="mb-2 font-semibold">Alergias</h2>
-              <div className="flex flex-wrap gap-2">
-                {patient.allergies.map((a) => (
-                  <span key={a} className="chip border-danger/40 text-danger">{a}</span>
-                ))}
-              </div>
-            </div>
-          )}
+          <TasksPanel patient={patient} refreshKey={tasksKey} />
 
-          <TimelineCard patient={patient} />
-          <LabsCard patient={patient} />
-          <TasksPanel patient={patient} />
+          <CaseAnalysisBlocks analysis={analysis} />
         </div>
       );
     case 'evolucao':
-      return <EvolucaoDiaria patient={patient} />;
+      return <EvolucaoDiaria patient={patient} onPatientUpdated={onPatientUpdated} />;
     case 'diferencial':
       return <DiferencialTab patient={patient} />;
     case 'diretrizes':
-      return <DiretrizesTab patient={patient} />;
+      return <DiretrizesTab patient={patient} initialTopic={diretrizTopic} />;
     case 'atualizacoes':
       return <AtualizacoesTab patient={patient} />;
     case 'prescricao':
