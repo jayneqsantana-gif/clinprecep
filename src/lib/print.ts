@@ -81,19 +81,10 @@ export function plantaoGridHtml(cells: PlantaoCell[]): string {
   return `<div class="pt-grid">${filled.map(cell).join('')}</div>`;
 }
 
-export function printA4(title: string, bodyHtml: string): void {
-  const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1200');
-  if (!win) {
-    alert('O navegador bloqueou a janela de impressão. Permita pop-ups para gerar o PDF.');
-    return;
-  }
-  const doc = win.document;
-  doc.open();
-  doc.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" />
-<title>${escapeHtml(title)}</title>
-<style>
+const PRINT_CSS = `
   @page { size: A4; margin: 14mm; }
   * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
   body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #111; font-size: 11pt; line-height: 1.4; }
   h1 { font-size: 15pt; margin: 0 0 2mm; }
   h2 { font-size: 12.5pt; margin: 4mm 0 1mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm; }
@@ -116,14 +107,61 @@ export function printA4(title: string, bodyHtml: string): void {
   .pt-pend-title { font-weight: 700; margin-top: 1mm; }
   .pt-foot { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #000; font-size: 8pt; }
   .pt-foot span { text-align: center; padding: 1mm 0; border-right: 1px solid #ccc; }
-  .pt-foot span:last-child { border-right: 0; }
-  @media print { .noprint { display: none; } }
-</style></head><body>
-${bodyHtml}
-<div class="noprint" style="margin-top:8mm;text-align:center;color:#666;font-size:9pt">
-  Use “Salvar como PDF” no destino da impressão. Esta janela pode ser fechada depois.
-</div>
-<script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>
-</body></html>`);
+  .pt-foot span:last-child { border-right: 0; }`;
+
+/**
+ * Imprime via IFRAME OCULTO na própria página (sem abrir pop-up — não é bloqueado
+ * por bloqueadores de pop-up). O usuário escolhe "Salvar como PDF" no diálogo.
+ */
+export function printA4(title: string, bodyHtml: string): void {
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" />
+<title>${escapeHtml(title)}</title>
+<style>${PRINT_CSS}</style></head><body>${bodyHtml}</body></html>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+  document.body.appendChild(iframe);
+
+  let cleaned = false;
+  let printed = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    setTimeout(() => iframe.parentNode?.removeChild(iframe), 1000);
+  };
+
+  const doPrint = () => {
+    if (printed) return; // evita disparar a impressão duas vezes (onload + fallback)
+    printed = true;
+    const win = iframe.contentWindow;
+    if (!win) {
+      cleanup();
+      return;
+    }
+    try {
+      win.focus();
+      win.onafterprint = cleanup;
+      win.print();
+    } catch {
+      cleanup();
+    }
+    // Rede de segurança: remove o iframe mesmo que onafterprint não dispare.
+    setTimeout(cleanup, 60000);
+  };
+
+  const doc = iframe.contentWindow?.document;
+  if (!doc) {
+    iframe.parentNode?.removeChild(iframe);
+    return;
+  }
+  // Escreve o conteúdo e dispara a impressão após o layout.
+  iframe.onload = () => setTimeout(doPrint, 200);
+  doc.open();
+  doc.write(html);
   doc.close();
+  // Fallback caso onload não dispare para about:blank em alguns navegadores.
+  setTimeout(() => {
+    if (!printed && iframe.contentWindow) doPrint();
+  }, 700);
 }
