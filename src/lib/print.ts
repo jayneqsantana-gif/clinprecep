@@ -56,6 +56,31 @@ export function simpleMarkdownToHtml(md: string): string {
   return out.join('\n');
 }
 
+export interface PlantaoCell {
+  header: string;
+  problems: string[];
+  pendencias: string[];
+}
+
+/** Monta o grid (3 colunas) da passagem de plantão a partir dos dados já estruturados. */
+export function plantaoGridHtml(cells: PlantaoCell[]): string {
+  const cell = (c: PlantaoCell) => {
+    const probs = c.problems.length
+      ? `<div class="pt-probs">${c.problems.map((p, i) => `<div>P${i + 1}. ${escapeHtml(p)}</div>`).join('')}</div>`
+      : '';
+    const pend = c.pendencias.length
+      ? `<div class="pt-pend"><div class="pt-pend-title">PENDÊNCIAS:</div>${c.pendencias
+          .map((p) => `<div>- ${escapeHtml(p)}</div>`)
+          .join('')}</div>`
+      : '';
+    return `<div class="pt-cell"><div class="pt-head">${escapeHtml(c.header)}</div><div class="pt-body">${probs}${pend}</div><div class="pt-foot"><span>Prescrição</span><span>Evolução</span><span>Exames</span></div></div>`;
+  };
+  // Completa a última linha com células vazias para o grid fechar bonito.
+  const filled = [...cells];
+  while (filled.length % 3 !== 0) filled.push({ header: '', problems: [], pendencias: [] });
+  return `<div class="pt-grid">${filled.map(cell).join('')}</div>`;
+}
+
 export function printA4(title: string, bodyHtml: string): void {
   const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1200');
   if (!win) {
@@ -80,6 +105,18 @@ export function printA4(title: string, bodyHtml: string): void {
   .patient { break-inside: avoid; page-break-inside: avoid; border: 1px solid #ddd; border-radius: 3mm; padding: 3mm 4mm; margin-bottom: 3mm; }
   .patient h2 { border: 0; margin-top: 0; }
   strong { font-weight: 700; }
+
+  /* Grid da passagem de plantão (leito a leito) */
+  .pt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid #000; border-left: 1px solid #000; }
+  .pt-cell { border-right: 1px solid #000; border-bottom: 1px solid #000; display: flex; flex-direction: column; min-height: 48mm; break-inside: avoid; page-break-inside: avoid; }
+  .pt-head { border-bottom: 1px solid #000; padding: 1.2mm 2mm; font-weight: 700; font-size: 9.5pt; background: #f2f2f2; }
+  .pt-body { flex: 1; padding: 1.5mm 2mm; font-size: 9pt; }
+  .pt-probs { margin-bottom: 1.5mm; }
+  .pt-probs div, .pt-pend div { margin: 0.3mm 0; }
+  .pt-pend-title { font-weight: 700; margin-top: 1mm; }
+  .pt-foot { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #000; font-size: 8pt; }
+  .pt-foot span { text-align: center; padding: 1mm 0; border-right: 1px solid #ccc; }
+  .pt-foot span:last-child { border-right: 0; }
   @media print { .noprint { display: none; } }
 </style></head><body>
 ${bodyHtml}
