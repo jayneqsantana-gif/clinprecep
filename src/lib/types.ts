@@ -8,6 +8,15 @@ export type ISODateTime = string; // ISO 8601
 
 export type ProblemStatus = 'ativo' | 'resolvido';
 
+/** Cenário de internação — define o estilo da anamnese. */
+export type PatientSetting = 'enfermaria' | 'uti' | 'ambulatorio';
+
+export const SETTING_LABEL: Record<PatientSetting, string> = {
+  enfermaria: 'Enfermaria',
+  uti: 'UTI',
+  ambulatorio: 'Ambulatório',
+};
+
 export interface Problem {
   id: string;
   order: number;
@@ -21,6 +30,7 @@ export interface Patient {
   label: string; // apelido/iniciais (ex.: "Leito 12 - J.Q.")
   age: number | null;
   sex: 'M' | 'F' | 'outro' | null;
+  setting: PatientSetting; // enfermaria | uti | ambulatorio
   admissionDate: ISODate | null;
   bed: string | null;
   allergies: string[]; // p/ checagem de alergia na prescrição (seção 7.8)

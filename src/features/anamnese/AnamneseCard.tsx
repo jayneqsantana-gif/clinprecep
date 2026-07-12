@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Wand2, Save, Pencil, RefreshCw, FileText } from 'lucide-react';
+import { Wand2, Save, Pencil, RefreshCw, FileText, Stethoscope } from 'lucide-react';
 import { useSession } from '@/store/session';
 import { getAnamnesis, saveAnamnesis, savePatient } from '@/lib/remoteRepo';
-import { buildPatientContext, extractOrganizerJson, stripOrganizerJson } from '@/lib/context';
+import {
+  buildPatientContext,
+  extractOrganizerJson,
+  parseOrganizerOutput,
+} from '@/lib/context';
+import { SETTING_LABEL } from '@/lib/types';
 import { useAiStream } from '@/hooks/useAiStream';
 import { useAttachments } from '@/hooks/useAttachments';
 import { AiOutput } from '@/components/AiOutput';
@@ -44,16 +49,20 @@ export function AnamneseCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, patient.id]);
 
-  const structuredText = (anamnesis?.structured as { text?: string } | undefined)?.text ?? '';
+  const structured = anamnesis?.structured as { text?: string; analysis?: string } | undefined;
+  const structuredText = structured?.text ?? '';
+  const analysisText = structured?.analysis ?? '';
 
   async function organizar() {
     if (!key || (!raw.trim() && att.items.length === 0)) return;
+    const cenario = `Cenário: ${SETTING_LABEL[patient.setting]}. Use o formato de ${SETTING_LABEL[patient.setting]}.`;
+    const texto = [cenario, raw.trim() || 'Organize a anamnese/admissão a partir da imagem/PDF anexado.'].join('\n\n');
     const content = att.items.length
       ? ([
-          { type: 'text', text: raw.trim() || 'Organize a anamnese/admissão a partir da imagem/PDF anexado.' },
+          { type: 'text', text: texto },
           ...att.items.map((a) => a.block),
         ] as ContentBlock[])
-      : raw;
+      : texto;
     const result = await ai.run({
       agent: 'organizador',
       systemExtra: buildPatientContext(patient),
@@ -68,7 +77,7 @@ export function AnamneseCard({
     if (!key) return;
     setSaving(true);
     try {
-      const clean = stripOrganizerJson(aiText);
+      const { anamnese, analysis } = parseOrganizerOutput(aiText);
       const parsed = extractOrganizerJson(aiText);
 
       // Mescla problemas e alergias (preserva status "resolvido" e edições manuais;
@@ -101,7 +110,7 @@ export function AnamneseCard({
       const a: Anamnesis = {
         patientId: patient.id,
         rawText,
-        structured: { text: clean },
+        structured: { text: anamnese, analysis },
         createdAt: new Date().toISOString(),
       };
       await saveAnamnesis(key, a);
@@ -120,7 +129,7 @@ export function AnamneseCard({
       const a: Anamnesis = {
         patientId: patient.id,
         rawText: anamnesis?.rawText ?? '',
-        structured: { text: editText },
+        structured: { text: editText, analysis: analysisText },
         createdAt: anamnesis?.createdAt ?? new Date().toISOString(),
       };
       await saveAnamnesis(key, a);
@@ -179,7 +188,27 @@ export function AnamneseCard({
           >
             <Wand2 className="h-4 w-4" /> {ai.loading ? 'Organizando…' : 'Organizar'}
           </button>
-          <AiOutput text={ai.text ? stripOrganizerJson(ai.text) : ''} loading={ai.loading} error={ai.error} />
+          {(() => {
+            const live = ai.text ? parseOrganizerOutput(ai.text) : { anamnese: '', analysis: '' };
+            return (
+              <>
+                <AiOutput
+                  text={live.anamnese}
+                  loading={ai.loading}
+                  error={ai.error}
+                  copyText={live.anamnese}
+                />
+                {live.analysis && (
+                  <div className="space-y-2 rounded-lg border border-brand/30 bg-brand/5 p-3">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-brand">
+                      <Stethoscope className="h-4 w-4" /> Análise clínica (IA)
+                    </p>
+                    <Markdown>{live.analysis}</Markdown>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -200,11 +229,21 @@ export function AnamneseCard({
       )}
 
       {mode === 'view' && structuredText && (
-        <div className="space-y-2">
-          <div className="rounded-lg border border-border bg-surface-2 p-3">
-            <Markdown>{structuredText}</Markdown>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <div className="rounded-lg border border-border bg-surface-2 p-3">
+              <Markdown>{structuredText}</Markdown>
+            </div>
+            <CopyButton text={structuredText} label="Copiar anamnese" />
           </div>
-          <CopyButton text={structuredText} label="Copiar anamnese" />
+          {analysisText && (
+            <div className="space-y-2 rounded-lg border border-brand/30 bg-brand/5 p-3">
+              <p className="flex items-center gap-2 text-sm font-semibold text-brand">
+                <Stethoscope className="h-4 w-4" /> Análise clínica (IA)
+              </p>
+              <Markdown>{analysisText}</Markdown>
+            </div>
+          )}
         </div>
       )}
     </div>

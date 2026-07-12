@@ -10,7 +10,8 @@ import {
   openTaskCount,
   type NewPatientInput,
 } from '@/lib/remoteRepo';
-import type { Patient } from '@/lib/types';
+import type { Patient, PatientSetting } from '@/lib/types';
+import { SETTING_LABEL } from '@/lib/types';
 import { diaInternacao } from '@/lib/dates';
 import { EmptyState, Modal } from '@/components/ui';
 
@@ -23,6 +24,7 @@ export function PatientsPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [adding, setAdding] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [cenario, setCenario] = useState<PatientSetting | 'todos'>('todos');
 
   async function refresh() {
     if (!key) return;
@@ -44,11 +46,18 @@ export function PatientsPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return patients;
-    return patients.filter(
-      (p) => p.label.toLowerCase().includes(q) || (p.bed ?? '').toLowerCase().includes(q),
-    );
-  }, [patients, query]);
+    return patients.filter((p) => {
+      if (cenario !== 'todos' && p.setting !== cenario) return false;
+      if (!q) return true;
+      return p.label.toLowerCase().includes(q) || (p.bed ?? '').toLowerCase().includes(q);
+    });
+  }, [patients, query, cenario]);
+
+  const contagemCenario = useMemo(() => {
+    const c: Record<string, number> = { todos: patients.length, enfermaria: 0, uti: 0, ambulatorio: 0 };
+    for (const p of patients) c[p.setting] = (c[p.setting] ?? 0) + 1;
+    return c;
+  }, [patients]);
 
   return (
     <div className="space-y-4">
@@ -75,6 +84,24 @@ export function PatientsPage() {
         >
           {showArchived ? 'Mostrando arquivados' : 'Ativos'}
         </button>
+      </div>
+
+      {/* Abas por cenário */}
+      <div className="-mx-4 overflow-x-auto px-4">
+        <div className="flex w-max gap-1 border-b border-border pb-px">
+          {(['todos', 'enfermaria', 'uti', 'ambulatorio'] as const).map((c) => (
+            <button
+              key={c}
+              onClick={() => setCenario(c)}
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-t-lg px-3 py-2 text-sm font-medium transition ${
+                cenario === c ? 'border-b-2 border-brand text-brand' : 'text-muted hover:text-text'
+              }`}
+            >
+              {c === 'todos' ? 'Todos' : SETTING_LABEL[c]}
+              <span className="rounded-full bg-surface-2 px-1.5 text-xs">{contagemCenario[c] ?? 0}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
@@ -120,6 +147,7 @@ export function PatientsPage() {
 
       {adding && key && (
         <AddPatientModal
+          defaultSetting={cenario === 'todos' ? 'enfermaria' : cenario}
           onClose={() => setAdding(false)}
           onCreate={async (input) => {
             const p = await createPatient(key, input);
@@ -166,6 +194,7 @@ function PatientCard({
             </span>
           )}
           {di != null && <span className="chip">D.I. {di}</span>}
+          <span className="chip">{SETTING_LABEL[patient.setting]}</span>
         </div>
       </button>
       <div className="flex gap-2 border-t border-border pt-2 text-xs">
@@ -183,13 +212,16 @@ function PatientCard({
 function AddPatientModal({
   onClose,
   onCreate,
+  defaultSetting,
 }: {
   onClose: () => void;
   onCreate: (input: NewPatientInput) => Promise<void>;
+  defaultSetting: PatientSetting;
 }) {
   const [label, setLabel] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<Patient['sex']>(null);
+  const [setting, setSetting] = useState<PatientSetting>(defaultSetting);
   const [admissionDate, setAdmissionDate] = useState('');
   const [bed, setBed] = useState('');
   const [busy, setBusy] = useState(false);
@@ -203,6 +235,7 @@ function AddPatientModal({
         label,
         age: age ? Number(age) : null,
         sex,
+        setting,
         admissionDate: admissionDate || null,
         bed: bed || null,
       });
@@ -262,6 +295,19 @@ function AddPatientModal({
           <div>
             <label className="label">Leito</label>
             <input className="input" value={bed} onChange={(e) => setBed(e.target.value)} />
+          </div>
+          <div className="col-span-2">
+            <label className="label">Cenário</label>
+            <select
+              className="input"
+              value={setting}
+              onChange={(e) => setSetting(e.target.value as PatientSetting)}
+            >
+              <option value="enfermaria">Enfermaria</option>
+              <option value="uti">UTI</option>
+              <option value="ambulatorio">Ambulatório</option>
+            </select>
+            <p className="mt-1 text-xs text-muted">Define o estilo da anamnese e da evolução.</p>
           </div>
         </div>
         <div className="flex justify-end gap-2 pt-2">

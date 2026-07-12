@@ -15,9 +15,15 @@ export type NewPatientInput = {
   label: string;
   age: number | null;
   sex: Patient['sex'];
+  setting: Patient['setting'];
   admissionDate: string | null;
   bed: string | null;
 };
+
+/** Garante o cenário (pacientes antigos sem `setting` viram Enfermaria). */
+function normalizePatient(p: Patient): Patient {
+  return { ...p, setting: p.setting ?? 'enfermaria' };
+}
 
 interface PatientRow {
   id: string;
@@ -48,6 +54,7 @@ export async function createPatient(key: CryptoKey, input: NewPatientInput): Pro
     label: input.label.trim(),
     age: input.age,
     sex: input.sex,
+    setting: input.setting,
     admissionDate: input.admissionDate,
     bed: input.bed,
     allergies: [],
@@ -74,14 +81,14 @@ export async function listPatients(key: CryptoKey, includeArchived = false): Pro
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as Pick<PatientRow, 'id' | 'enc' | 'updated_at'>[];
-  return Promise.all(rows.map((r) => decryptJSON<Patient>(key, r.enc)));
+  return Promise.all(rows.map(async (r) => normalizePatient(await decryptJSON<Patient>(key, r.enc))));
 }
 
 export async function getPatient(key: CryptoKey, id: string): Promise<Patient | null> {
   const { data, error } = await supabase.from('patients').select('enc').eq('id', id).maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  return decryptJSON<Patient>(key, (data as { enc: Cipher }).enc);
+  return normalizePatient(await decryptJSON<Patient>(key, (data as { enc: Cipher }).enc));
 }
 
 export async function savePatient(key: CryptoKey, patient: Patient): Promise<Patient> {

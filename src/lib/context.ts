@@ -57,3 +57,18 @@ export function extractOrganizerJson(text: string): { problemList?: { title: str
 export function stripOrganizerJson(text: string): string {
   return text.replace(/<json>[\s\S]*?<\/json>/i, '').trim();
 }
+
+/**
+ * Separa a saída do Organizador em: anamnese (pronta para copiar) e análise da
+ * IA. O agente emite a anamnese, depois o marcador ===ANALISE===, depois a
+ * análise, e por fim o <json>. Durante o streaming, se o marcador ainda não
+ * apareceu, tudo é tratado como anamnese.
+ */
+export function parseOrganizerOutput(text: string): { anamnese: string; analysis: string } {
+  const noJson = stripOrganizerJson(text);
+  const idx = noJson.search(/={2,}\s*AN[ÁA]LISE\s*={2,}/i);
+  if (idx === -1) return { anamnese: noJson.trim(), analysis: '' };
+  const anamnese = noJson.slice(0, idx).trim();
+  const analysis = noJson.slice(idx).replace(/={2,}\s*AN[ÁA]LISE\s*={2,}/i, '').trim();
+  return { anamnese, analysis };
+}
