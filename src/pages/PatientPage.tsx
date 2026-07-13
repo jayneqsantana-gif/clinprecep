@@ -60,6 +60,11 @@ export function PatientPage() {
     void getPatient(key, id).then(setPatient);
   }, [key, id]);
 
+  // Ao trocar de aba, volta ao topo (evita abrir a aba nova rolada lá embaixo).
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [tab]);
+
   if (patient === undefined) return <p className="text-muted">Carregando…</p>;
   if (patient === null) {
     return (

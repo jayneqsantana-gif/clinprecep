@@ -77,16 +77,16 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-t-2xl border border-border bg-surface p-5 shadow-xl sm:rounded-2xl"
+        className="flex max-h-[90dvh] w-full max-w-lg flex-col rounded-t-2xl border border-border bg-surface shadow-xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="text-lg font-bold">{title}</h2>
           <button className="btn-ghost px-2 py-2" onClick={onClose} aria-label="Fechar">
             <X className="h-5 w-5" />
           </button>
         </div>
-        {children}
+        <div className="overflow-y-auto p-4">{children}</div>
       </div>
     </div>
   );

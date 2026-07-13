@@ -42,10 +42,15 @@ export function buildPatientContext(
   return linhas.join('\n');
 }
 
-/** Extrai o bloco <json>...</json> do agente Organizador (problemList + allergies). */
-export function extractOrganizerJson(
-  text: string,
-): { problemList?: { title: string; status?: 'ativo' | 'resolvido' }[]; allergies?: string[] } | null {
+/** Extrai o bloco <json>...</json> do agente Organizador (problemList + allergies + demografia). */
+export function extractOrganizerJson(text: string): {
+  problemList?: { title: string; status?: 'ativo' | 'resolvido' }[];
+  allergies?: string[];
+  age?: number | null;
+  sex?: 'M' | 'F' | 'outro' | null;
+  bed?: string | null;
+  admissionDate?: string | null;
+} | null {
   const m = text.match(/<json>([\s\S]*?)<\/json>/i);
   if (!m) return null;
   try {

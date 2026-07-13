@@ -104,27 +104,38 @@ export function AnamneseCard({
       const { anamnese, analysis } = parseOrganizerOutput(aiText);
       const parsed = extractOrganizerJson(aiText);
 
-      // Mescla problemas e alergias (preserva status "resolvido" e edições manuais;
-      // acrescenta só o que é novo).
+      // Mescla problemas/alergias e preenche a demografia AUTOMATICAMENTE a partir
+      // da anamnese (só o que ainda está em branco — não sobrescreve o que o médico digitou).
       let updatedPatient = patient;
-      if (parsed?.problemList?.length || parsed?.allergies?.length) {
-        const norm = (s: string) => s.trim().toLowerCase();
-        const existentes = patient.problemList;
-        const titulos = new Set(existentes.map((p) => norm(p.title)));
-        const novos: Problem[] = (parsed.problemList ?? [])
-          .filter((p) => p.title && !titulos.has(norm(p.title)))
-          .map((p, i) => ({
-            id: crypto.randomUUID(),
-            order: existentes.length + i,
-            title: p.title,
-            status: 'ativo',
-            linkedGuidelineTopic: null,
-          }));
-        const mergedAllergies = Array.from(
-          new Set([...patient.allergies, ...(parsed.allergies ?? [])].map((a) => a.trim()).filter(Boolean)),
-        );
+      const norm = (s: string) => s.trim().toLowerCase();
+      const existentes = patient.problemList;
+      const titulos = new Set(existentes.map((p) => norm(p.title)));
+      const novos: Problem[] = (parsed?.problemList ?? [])
+        .filter((p) => p.title && !titulos.has(norm(p.title)))
+        .map((p, i) => ({
+          id: crypto.randomUUID(),
+          order: existentes.length + i,
+          title: p.title,
+          status: 'ativo',
+          linkedGuidelineTopic: null,
+        }));
+      const mergedAllergies = Array.from(
+        new Set([...patient.allergies, ...(parsed?.allergies ?? [])].map((a) => a.trim()).filter(Boolean)),
+      );
+      const demografia: Partial<Patient> = {};
+      if (patient.age == null && typeof parsed?.age === 'number') demografia.age = parsed.age;
+      if (patient.sex == null && parsed?.sex) demografia.sex = parsed.sex;
+      if (!patient.bed && parsed?.bed) demografia.bed = parsed.bed;
+      if (!patient.admissionDate && parsed?.admissionDate) demografia.admissionDate = parsed.admissionDate;
+
+      const mudou =
+        novos.length > 0 ||
+        mergedAllergies.length !== patient.allergies.length ||
+        Object.keys(demografia).length > 0;
+      if (mudou) {
         updatedPatient = await savePatient(key, {
           ...patient,
+          ...demografia,
           problemList: [...existentes, ...novos],
           allergies: mergedAllergies,
         });

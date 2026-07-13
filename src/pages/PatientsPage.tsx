@@ -309,7 +309,8 @@ function AddPatientModal({
             onChange={(e) => setLabel(e.target.value)}
           />
           <p className="mt-1 text-xs text-muted">
-            Nunca use nome completo, CPF ou nº de prontuário.
+            Nunca use nome completo, CPF ou nº de prontuário. Idade, sexo, leito e data de admissão são
+            preenchidos <strong>automaticamente</strong> quando você organizar a anamnese — pode deixar em branco.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3">

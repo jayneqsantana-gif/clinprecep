@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { useSession } from '@/store/session';
@@ -69,6 +69,7 @@ export default function App() {
   // 5. App.
   return (
     <AppShell>
+      <ScrollToTop />
       <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/" element={<Navigate to="/pacientes" replace />} />
@@ -82,6 +83,15 @@ export default function App() {
       </Suspense>
     </AppShell>
   );
+}
+
+/** Rola para o topo a cada mudança de rota (evita abrir a página nova rolada). */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [pathname]);
+  return null;
 }
 
 function SupabaseSetupNeeded() {
