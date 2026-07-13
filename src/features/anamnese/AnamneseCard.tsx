@@ -333,7 +333,9 @@ export function AnamneseCard({
             Trechos em <strong className="text-warn">destaque</strong> foram complementados/presumidos pela IA — confirme
             antes de transcrever (o texto copiado sai limpo, sem marcações).
           </p>
-          <CopyButton text={stripBold(structuredText)} label="Copiar anamnese" />
+          <div className="sticky bottom-[4.75rem] z-10 flex justify-end rounded-lg border border-border bg-surface/95 p-1.5 backdrop-blur">
+            <CopyButton text={stripBold(structuredText)} label="Copiar anamnese" />
+          </div>
         </div>
       )}
     </div>

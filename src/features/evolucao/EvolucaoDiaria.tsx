@@ -216,21 +216,21 @@ export function EvolucaoDiaria({
           <AiOutput text="" loading={true} error={null} />
         ) : (
           live.anamnese && (
-            <div className="space-y-2 rounded-lg border border-border bg-surface-2 p-3">
-              <ClinicalText text={live.anamnese} />
-              {gen.loading ? (
-                <p className="text-xs text-muted">gerando…</p>
-              ) : (
-                <CopyButton text={stripBold(live.anamnese)} label="Copiar evolução" />
+            <div className="space-y-2">
+              <div className="rounded-lg border border-border bg-surface-2 p-3">
+                <ClinicalText text={live.anamnese} />
+                {gen.loading && <p className="mt-2 text-xs text-muted">gerando…</p>}
+              </div>
+              {!gen.loading && (
+                <div className="sticky bottom-[4.75rem] z-10 flex flex-wrap gap-2 rounded-lg border border-border bg-surface/95 p-1.5 backdrop-blur">
+                  <button className="btn-primary flex-1 justify-center" disabled={saving} onClick={salvar}>
+                    <Save className="h-4 w-4" /> {saving ? 'Salvando…' : 'Salvar e gerar análise'}
+                  </button>
+                  <CopyButton text={stripBold(live.anamnese)} label="Copiar" />
+                </div>
               )}
             </div>
           )
-        )}
-
-        {gen.text && !gen.loading && (
-          <button className="btn-primary" disabled={saving} onClick={salvar}>
-            <Save className="h-4 w-4" /> {saving ? 'Salvando…' : 'Salvar evolução e gerar análise do caso'}
-          </button>
         )}
       </div>
 

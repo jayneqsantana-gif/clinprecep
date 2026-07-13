@@ -4,20 +4,9 @@ import { Modal } from '@/components/ui';
 import { useSession } from '@/store/session';
 import { listTasks } from '@/lib/remoteRepo';
 import { todayISO, fmtBR } from '@/lib/dates';
+import { compareByBed } from '@/lib/beds';
 import { printA4, plantaoGridHtml, type PlantaoCell } from '@/lib/print';
 import { type Patient } from '@/lib/types';
-
-/** Ordena por leito de forma "natural" (12 antes de 100; texto alfabético). */
-function bedKey(bed: string | null): [string, number, string] {
-  const b = (bed ?? '~').trim();
-  const m = b.match(/(\d+)/);
-  return [b.replace(/\d+/g, '').toLowerCase(), m ? Number(m[1]) : Number.MAX_SAFE_INTEGER, b.toLowerCase()];
-}
-function cmpBed(a: Patient, b: Patient): number {
-  const [pa, na, sa] = bedKey(a.bed);
-  const [pb, nb, sb] = bedKey(b.bed);
-  return pa < pb ? -1 : pa > pb ? 1 : na - nb || (sa < sb ? -1 : sa > sb ? 1 : 0);
-}
 
 /**
  * Passagem de plantão enxuta, leito a leito, para imprimir e levar ao leito:
@@ -28,7 +17,7 @@ export function PassagemPlantaoModal({ patients, onClose }: { patients: Patient[
   const [building, setBuilding] = useState(true);
   const [cells, setCells] = useState<PlantaoCell[]>([]);
 
-  const ordered = useMemo(() => [...patients].filter((p) => p.active).sort(cmpBed), [patients]);
+  const ordered = useMemo(() => [...patients].filter((p) => p.active).sort(compareByBed), [patients]);
 
   useEffect(() => {
     if (!key) return;

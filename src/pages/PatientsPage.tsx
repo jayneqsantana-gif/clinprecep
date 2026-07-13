@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Archive,
   Trash2,
+  ArrowUpDown,
 } from 'lucide-react';
 import { useSession } from '@/store/session';
 import {
@@ -25,6 +26,7 @@ import {
 import type { Patient, PatientSetting } from '@/lib/types';
 import { SETTING_LABEL, SETTINGS_ORDER } from '@/lib/types';
 import { diaInternacao } from '@/lib/dates';
+import { compareByBed } from '@/lib/beds';
 import { EmptyState, Modal } from '@/components/ui';
 import { GenderIcon } from '@/components/GenderIcon';
 import { TranscreverLabModal } from '@/features/passagem/TranscreverLabModal';
@@ -41,6 +43,7 @@ export function PatientsPage() {
   const [adding, setAdding] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [cenario, setCenario] = useState<PatientSetting | 'todos'>('todos');
+  const [ordem, setOrdem] = useState<'leito' | 'recentes'>('leito');
   const [transcrevendo, setTranscrevendo] = useState(false);
   const [plantao, setPlantao] = useState(false);
   const [passeCaso, setPasseCaso] = useState<Patient | null>(null);
@@ -65,12 +68,14 @@ export function PatientsPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return patients.filter((p) => {
+    const list = patients.filter((p) => {
       if (cenario !== 'todos' && p.setting !== cenario) return false;
       if (!q) return true;
       return p.label.toLowerCase().includes(q) || (p.bed ?? '').toLowerCase().includes(q);
     });
-  }, [patients, query, cenario]);
+    // 'recentes' já vem ordenado por updated_at desc do repositório.
+    return ordem === 'leito' ? [...list].sort(compareByBed) : list;
+  }, [patients, query, cenario, ordem]);
 
   const contagemCenario = useMemo(() => {
     const c: Record<string, number> = { todos: patients.length, enfermaria: 0, uti: 0, ambulatorio: 0, psf: 0 };
@@ -106,10 +111,17 @@ export function PatientsPage() {
           />
         </div>
         <button
+          className="chip cursor-pointer"
+          onClick={() => setOrdem((o) => (o === 'leito' ? 'recentes' : 'leito'))}
+          title="Alternar ordenação"
+        >
+          <ArrowUpDown className="h-3.5 w-3.5" /> {ordem === 'leito' ? 'Por leito' : 'Recentes'}
+        </button>
+        <button
           className={`chip ${showArchived ? 'border-brand text-brand' : ''}`}
           onClick={() => setShowArchived((v) => !v)}
         >
-          {showArchived ? 'Mostrando arquivados' : 'Ativos'}
+          {showArchived ? 'Arquivados' : 'Ativos'}
         </button>
       </div>
 

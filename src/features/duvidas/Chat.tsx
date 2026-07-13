@@ -146,7 +146,7 @@ export function Chat({
         <div ref={endRef} />
       </div>
 
-      <div className="sticky bottom-16 space-y-2 bg-bg/80 py-1 backdrop-blur">
+      <div className="safe-b sticky bottom-[4.75rem] z-10 space-y-2 rounded-xl border border-border bg-bg/95 p-2 backdrop-blur">
         {att.items.length > 0 && <AttachmentList items={att.items} onRemove={att.remove} />}
         {att.error && <p className="text-xs text-danger">{att.error}</p>}
         <div className="flex items-end gap-2">
@@ -154,6 +154,7 @@ export function Chat({
           <textarea
             className="input min-h-[44px] flex-1 resize-none"
             rows={1}
+            enterKeyHint="send"
             placeholder={placeholder ?? 'Escreva sua pergunta… (pode colar uma imagem)'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
