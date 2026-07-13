@@ -14,7 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const lock = useSession((s) => s.lock);
 
   return (
-    <div className="mx-auto flex min-h-full max-w-3xl flex-col">
+    <div className="mx-auto flex min-h-full max-w-6xl flex-col">
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg/90 px-4 py-3 backdrop-blur">
         <div className="flex items-center gap-2">
           <img src="/icons/icon.svg" alt="" className="h-6 w-6" />
@@ -29,7 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Barra de navegação inferior — ações-chave a um toque (seção 11) */}
       <nav className="safe-b fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl">
+        <div className="mx-auto flex max-w-6xl">
           {nav.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}

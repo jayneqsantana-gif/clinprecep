@@ -61,7 +61,7 @@ export const CALCULATORS: Calculator[] = [
     source: 'BTS/Lim et al., Thorax 2003',
     items: [
       { key: 'c', label: 'Confusão mental (desorientação recente)', points: 1 },
-      { key: 'u', label: 'Ureia ≥ 50 mg/dL', points: 1 },
+      { key: 'u', label: 'Ureia > 43 mg/dL (ureia > 7 mmol/L)', points: 1 },
       { key: 'r', label: 'FR ≥ 30 irpm', points: 1 },
       { key: 'b', label: 'PAS < 90 ou PAD ≤ 60 mmHg', points: 1 },
       { key: '65', label: 'Idade ≥ 65 anos', points: 1 },

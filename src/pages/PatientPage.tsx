@@ -108,8 +108,8 @@ export function PatientPage() {
         </div>
       </div>
 
-      <div className="-mx-4 overflow-x-auto px-4">
-        <div className="flex w-max gap-1 border-b border-border pb-px">
+      <div className="sticky top-[3.25rem] z-20 -mx-4 overflow-x-auto border-b border-border bg-bg/95 px-4 backdrop-blur">
+        <div className="flex w-max gap-1">
           {TABS.map((t) => (
             <button
               key={t.key}
