@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, Search, BedDouble, AlertTriangle, FlaskConical, Printer, FileText } from 'lucide-react';
+import {
+  Plus,
+  Users,
+  Search,
+  BedDouble,
+  AlertTriangle,
+  FlaskConical,
+  Printer,
+  FileText,
+  ClipboardList,
+  Archive,
+  Trash2,
+} from 'lucide-react';
 import { useSession } from '@/store/session';
 import {
   createPatient,
@@ -197,19 +209,22 @@ function PatientCard({
 }) {
   const di = diaInternacao(patient.admissionDate);
   return (
-    <div className="card flex flex-col gap-3">
+    <div className="card flex flex-col gap-3 transition hover:border-brand/40 hover:shadow-lg hover:shadow-black/20">
       <button className="flex-1 text-left" onClick={onOpen}>
         <div className="flex items-start justify-between gap-2">
-          <span className="flex items-center gap-1.5 font-semibold">
-            <GenderIcon sex={patient.sex} /> {patient.label}
+          <span className="flex items-center gap-1.5 text-[15px] font-semibold leading-tight">
+            <GenderIcon sex={patient.sex} className="text-base" /> {patient.label}
           </span>
           {openTasks > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 text-xs font-medium text-warn">
+            <span
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 text-xs font-medium text-warn"
+              title={`${openTasks} pendência(s) aberta(s)`}
+            >
               <AlertTriangle className="h-3 w-3" /> {openTasks}
             </span>
           )}
         </div>
-        <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted">
           {patient.age != null && <span>{patient.age}a</span>}
           {patient.bed && (
             <span className="inline-flex items-center gap-1">
@@ -220,19 +235,27 @@ function PatientCard({
           <span className="chip">{SETTING_LABEL[patient.setting]}</span>
         </div>
       </button>
-      <div className="grid grid-cols-2 gap-1.5 border-t border-border pt-2 text-xs">
-        <button className="btn-ghost justify-center px-2 py-1" onClick={onOpen}>
-          <FileText className="h-3.5 w-3.5" /> Abrir prontuário
-        </button>
-        <button className="btn-ghost justify-center px-2 py-1" onClick={onPasse}>
-          <FlaskConical className="h-3.5 w-3.5" /> Passe o caso
-        </button>
-        <button className="btn-ghost justify-center px-2 py-1" onClick={onArchive}>
-          {patient.active ? 'Arquivar' : 'Reativar'}
-        </button>
-        <button className="btn-ghost justify-center px-2 py-1 text-danger" onClick={onDelete}>
-          Remover
-        </button>
+
+      <div className="space-y-2 border-t border-border pt-3">
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn-primary justify-center whitespace-nowrap px-2 py-1.5 text-xs" onClick={onOpen}>
+            <FileText className="h-3.5 w-3.5" /> Abrir
+          </button>
+          <button
+            className="btn-ghost justify-center whitespace-nowrap border border-border px-2 py-1.5 text-xs"
+            onClick={onPasse}
+          >
+            <ClipboardList className="h-3.5 w-3.5" /> Passe o caso
+          </button>
+        </div>
+        <div className="flex items-center justify-end gap-4 text-[11px] text-muted">
+          <button className="inline-flex items-center gap-1 hover:text-text" onClick={onArchive}>
+            <Archive className="h-3 w-3" /> {patient.active ? 'Arquivar' : 'Reativar'}
+          </button>
+          <button className="inline-flex items-center gap-1 hover:text-danger" onClick={onDelete}>
+            <Trash2 className="h-3 w-3" /> Remover
+          </button>
+        </div>
       </div>
     </div>
   );

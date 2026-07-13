@@ -5,7 +5,7 @@ import { useAiStream } from '@/hooks/useAiStream';
 import { useAttachments } from '@/hooks/useAttachments';
 import { AiOutput } from '@/components/AiOutput';
 import { AttachButton, AttachmentList, AttachmentNotice } from '@/components/Attachments';
-import { Markdown } from '@/components/Markdown';
+import { ClinicalText, stripBold } from '@/components/ClinicalText';
 import { CopyButton, Disclaimer } from '@/components/ui';
 import {
   getAnamnesis,
@@ -136,10 +136,10 @@ export function AltaTab({ patient }: { patient: Patient }) {
           ai.text && (
             <div className="space-y-2">
               <div className="rounded-lg border border-border bg-surface-2 p-3">
-                <Markdown>{ai.text}</Markdown>
+                <ClinicalText text={ai.text} />
               </div>
               <div className="flex gap-2">
-                <CopyButton text={ai.text} label="Copiar alta" />
+                <CopyButton text={stripBold(ai.text)} label="Copiar alta" />
                 <button className="btn-ghost border border-border" onClick={() => imprimir(ai.text, fmtBR(todayISO()))}>
                   <Printer className="h-4 w-4" /> Imprimir / PDF (A4)
                 </button>
@@ -180,7 +180,7 @@ function SavedAlta({
           <span className="font-medium">Alta</span>
           <span className="chip text-[10px]">{data}</span>
         </button>
-        <CopyButton text={alta.content} />
+        <CopyButton text={stripBold(alta.content)} />
         <button className="btn-ghost px-2 py-1" onClick={() => onPrint(alta.content, data)} aria-label="Imprimir">
           <Printer className="h-4 w-4" />
         </button>
@@ -197,7 +197,7 @@ function SavedAlta({
       </div>
       {open && (
         <div className="mt-3 border-t border-border pt-3">
-          <Markdown>{alta.content}</Markdown>
+          <ClinicalText text={alta.content} />
         </div>
       )}
     </div>

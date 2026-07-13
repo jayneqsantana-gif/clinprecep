@@ -24,7 +24,7 @@ import { useAttachments } from '@/hooks/useAttachments';
 import { AiOutput } from '@/components/AiOutput';
 import { AttachButton, AttachmentList, AttachmentNotice } from '@/components/Attachments';
 import { CaseAnalysisBlocks } from '@/features/anamnese/CaseAnalysisBlocks';
-import { Markdown } from '@/components/Markdown';
+import { ClinicalText, stripBold } from '@/components/ClinicalText';
 import { CopyButton, Disclaimer } from '@/components/ui';
 import { imagesFromPaste, type ContentBlock } from '@/lib/attachments';
 import { todayISO, fmtBR, diaInternacao } from '@/lib/dates';
@@ -209,15 +209,19 @@ export function EvolucaoDiaria({
         </button>
 
         {/* Anamnese/evolução atualizada, pronta para copiar */}
-        {gen.loading || gen.error ? (
-          <AiOutput text={live.anamnese} loading={gen.loading} error={gen.error} copyText={live.anamnese} />
+        {gen.error ? (
+          <AiOutput text="" loading={false} error={gen.error} />
+        ) : gen.loading && !live.anamnese ? (
+          <AiOutput text="" loading={true} error={null} />
         ) : (
           live.anamnese && (
-            <div className="space-y-2">
-              <div className="rounded-lg border border-border bg-surface-2 p-3">
-                <Markdown>{live.anamnese}</Markdown>
-              </div>
-              <CopyButton text={live.anamnese} label="Copiar evolução" />
+            <div className="space-y-2 rounded-lg border border-border bg-surface-2 p-3">
+              <ClinicalText text={live.anamnese} />
+              {gen.loading ? (
+                <p className="text-xs text-muted">gerando…</p>
+              ) : (
+                <CopyButton text={stripBold(live.anamnese)} label="Copiar evolução" />
+              )}
             </div>
           )
         )}
@@ -251,7 +255,7 @@ function EvolutionItem({ evo, onDeleted }: { evo: Evolution; onDeleted: () => vo
   const out = evo.structuredOutput as { text?: string; analysis?: string } | undefined;
   const full = out?.text ?? '';
   const analysis = out?.analysis ?? '';
-  const copyText = evo.cleanVersion || full;
+  const copyText = stripBold(evo.cleanVersion || full);
   return (
     <div className="card">
       <div className="flex items-center gap-2">
@@ -275,9 +279,12 @@ function EvolutionItem({ evo, onDeleted }: { evo: Evolution; onDeleted: () => vo
       {open && (
         <div className="mt-3 space-y-3 border-t border-border pt-3">
           {full && (
-            <div>
-              <p className="mb-1 text-xs font-semibold text-muted">Anamnese/evolução</p>
-              <Markdown>{full}</Markdown>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted">Anamnese/evolução</p>
+              <div className="rounded-lg border border-border bg-surface-2 p-3">
+                <ClinicalText text={full} />
+              </div>
+              <CopyButton text={stripBold(full)} label="Copiar" />
             </div>
           )}
           {analysis && <CaseAnalysisBlocks analysis={analysis} />}

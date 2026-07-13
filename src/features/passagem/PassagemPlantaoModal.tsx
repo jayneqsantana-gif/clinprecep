@@ -54,7 +54,7 @@ export function PassagemPlantaoModal({ patients, onClose }: { patients: Patient[
 
   function imprimir() {
     const header = `<h1>Passagem de plantão</h1><div class="meta">${fmtBR(todayISO())} · ${ordered.length} leito(s)</div>`;
-    printA4('Passagem de plantão', header + plantaoGridHtml(cells));
+    printA4('Passagem de plantão', header + plantaoGridHtml(cells), { landscape: true });
   }
 
   return (
@@ -78,7 +78,7 @@ export function PassagemPlantaoModal({ patients, onClose }: { patients: Patient[
                     <div className="border-b border-border bg-surface-2 px-2 py-1 font-semibold">{c.header}</div>
                     <div className="flex-1 space-y-1 px-2 py-1.5">
                       {c.problems.length > 0 && (
-                        <div>
+                        <div className="font-semibold">
                           {c.problems.map((p, k) => (
                             <div key={k}>
                               P{k + 1}. {p}
@@ -90,7 +90,9 @@ export function PassagemPlantaoModal({ patients, onClose }: { patients: Patient[
                         <div>
                           <div className="font-semibold">PENDÊNCIAS:</div>
                           {c.pendencias.map((p, k) => (
-                            <div key={k}>- {p}</div>
+                            <div key={k} className="font-normal text-muted">
+                              - {p}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -109,8 +111,8 @@ export function PassagemPlantaoModal({ patients, onClose }: { patients: Patient[
               <Printer className="h-4 w-4" /> Imprimir / PDF (A4)
             </button>
             <p className="text-xs text-muted">
-              Dica: no diálogo de impressão, use “Salvar como PDF”. Ajuste a orientação para paisagem se quiser as 3
-              colunas mais largas.
+              Já sai em <strong>paisagem</strong>, enxuto para caber em uma página. No diálogo de impressão, escolha
+              “Salvar como PDF”.
             </p>
           </>
         )}

@@ -82,41 +82,45 @@ export function plantaoGridHtml(cells: PlantaoCell[]): string {
 }
 
 const PRINT_CSS = `
-  @page { size: A4; margin: 14mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #111; font-size: 11pt; line-height: 1.4; }
-  h1 { font-size: 15pt; margin: 0 0 2mm; }
+  h1 { font-size: 14pt; margin: 0 0 1.5mm; }
   h2 { font-size: 12.5pt; margin: 4mm 0 1mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm; }
   h3, h4 { font-size: 11.5pt; margin: 3mm 0 1mm; }
   p { margin: 1mm 0; }
   ul { margin: 1mm 0 1mm 5mm; padding: 0; }
   li { margin: 0.5mm 0; }
-  .meta { color: #555; font-size: 9.5pt; margin-bottom: 4mm; }
+  .meta { color: #555; font-size: 9pt; margin-bottom: 3mm; }
   .patient { break-inside: avoid; page-break-inside: avoid; border: 1px solid #ddd; border-radius: 3mm; padding: 3mm 4mm; margin-bottom: 3mm; }
   .patient h2 { border: 0; margin-top: 0; }
   strong { font-weight: 700; }
 
-  /* Grid da passagem de plantão (leito a leito) */
+  /* Grid da passagem de plantão (leito a leito) — enxuto, cabe em 1 página */
   .pt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid #000; border-left: 1px solid #000; }
-  .pt-cell { border-right: 1px solid #000; border-bottom: 1px solid #000; display: flex; flex-direction: column; min-height: 48mm; break-inside: avoid; page-break-inside: avoid; }
-  .pt-head { border-bottom: 1px solid #000; padding: 1.2mm 2mm; font-weight: 700; font-size: 9.5pt; background: #f2f2f2; }
-  .pt-body { flex: 1; padding: 1.5mm 2mm; font-size: 9pt; }
-  .pt-probs { margin-bottom: 1.5mm; }
-  .pt-probs div, .pt-pend div { margin: 0.3mm 0; }
-  .pt-pend-title { font-weight: 700; margin-top: 1mm; }
-  .pt-foot { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #000; font-size: 8pt; }
-  .pt-foot span { text-align: center; padding: 1mm 0; border-right: 1px solid #ccc; }
+  .pt-cell { border-right: 1px solid #000; border-bottom: 1px solid #000; display: flex; flex-direction: column; break-inside: avoid; page-break-inside: avoid; }
+  .pt-head { border-bottom: 1px solid #000; padding: 0.8mm 1.5mm; font-weight: 700; font-size: 8.5pt; background: #f2f2f2; }
+  .pt-body { flex: 1; padding: 1mm 1.5mm; font-size: 8pt; line-height: 1.25; }
+  .pt-probs { font-weight: 700; margin-bottom: 1mm; }
+  .pt-probs div, .pt-pend div { margin: 0.2mm 0; }
+  .pt-pend { font-weight: 400; }
+  .pt-pend-title { font-weight: 700; margin-top: 0.6mm; }
+  .pt-foot { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #000; font-size: 7pt; color: #444; }
+  .pt-foot span { text-align: center; padding: 0.6mm 0; border-right: 1px solid #ccc; }
   .pt-foot span:last-child { border-right: 0; }`;
 
 /**
  * Imprime via IFRAME OCULTO na própria página (sem abrir pop-up — não é bloqueado
  * por bloqueadores de pop-up). O usuário escolhe "Salvar como PDF" no diálogo.
+ * `opts.landscape` imprime em paisagem (ex.: passagem de plantão).
  */
-export function printA4(title: string, bodyHtml: string): void {
+export function printA4(title: string, bodyHtml: string, opts?: { landscape?: boolean }): void {
+  const page = opts?.landscape
+    ? '@page { size: A4 landscape; margin: 8mm; }'
+    : '@page { size: A4; margin: 14mm; }';
   const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" />
 <title>${escapeHtml(title)}</title>
-<style>${PRINT_CSS}</style></head><body>${bodyHtml}</body></html>`;
+<style>${page}${PRINT_CSS}</style></head><body>${bodyHtml}</body></html>`;
 
   const iframe = document.createElement('iframe');
   iframe.setAttribute('aria-hidden', 'true');

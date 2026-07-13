@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Wand2, Save, Pencil, RefreshCw, FileText, Stethoscope } from 'lucide-react';
+import { Wand2, Save, Pencil, RefreshCw, FileText, Stethoscope, Loader2 } from 'lucide-react';
 import { useSession } from '@/store/session';
 import { getAnamnesis, saveAnamnesis, savePatient, listTasks, createTask } from '@/lib/remoteRepo';
 import {
@@ -15,6 +15,7 @@ import { AiOutput } from '@/components/AiOutput';
 import { AttachButton, AttachmentList, AttachmentNotice } from '@/components/Attachments';
 import { imagesFromPaste, type ContentBlock } from '@/lib/attachments';
 import { Markdown } from '@/components/Markdown';
+import { ClinicalText, stripBold } from '@/components/ClinicalText';
 import { CopyButton } from '@/components/ui';
 import type { Patient, Anamnesis, Problem } from '@/lib/types';
 
@@ -215,14 +216,27 @@ export function AnamneseCard({
           </button>
           {(() => {
             const live = ai.text ? parseOrganizerOutput(ai.text) : { anamnese: '', analysis: '' };
+            if (ai.error) return <AiOutput text="" loading={false} error={ai.error} />;
+            if (!ai.loading && !live.anamnese) return null;
             return (
               <>
-                <AiOutput
-                  text={live.anamnese}
-                  loading={ai.loading}
-                  error={ai.error}
-                  copyText={live.anamnese}
-                />
+                <div className="space-y-2 rounded-lg border border-border bg-surface p-3">
+                  {ai.loading && !live.anamnese ? (
+                    <span className="flex items-center gap-2 text-sm text-muted">
+                      <Loader2 className="h-4 w-4 animate-spin" /> A IA está organizando…
+                    </span>
+                  ) : (
+                    <ClinicalText text={live.anamnese} />
+                  )}
+                  {ai.loading && live.anamnese && (
+                    <div className="flex items-center gap-2 text-xs text-muted">
+                      <Loader2 className="h-3 w-3 animate-spin" /> gerando…
+                    </div>
+                  )}
+                  {!ai.loading && live.anamnese && (
+                    <CopyButton text={stripBold(live.anamnese)} label="Copiar anamnese" />
+                  )}
+                </div>
                 {live.analysis && (
                   <div className="space-y-2 rounded-lg border border-brand/30 bg-brand/5 p-3">
                     <p className="flex items-center gap-2 text-sm font-semibold text-brand">
@@ -256,12 +270,13 @@ export function AnamneseCard({
       {mode === 'view' && structuredText && (
         <div className="space-y-2">
           <div className="rounded-lg border border-border bg-surface-2 p-3">
-            <Markdown>{structuredText}</Markdown>
+            <ClinicalText text={structuredText} />
           </div>
           <p className="text-xs text-muted">
-            Trechos em <strong>negrito</strong> foram complementados/presumidos pela IA — confirme antes de transcrever.
+            Trechos em <strong className="text-warn">destaque</strong> foram complementados/presumidos pela IA — confirme
+            antes de transcrever (o texto copiado sai limpo, sem marcações).
           </p>
-          <CopyButton text={structuredText} label="Copiar anamnese" />
+          <CopyButton text={stripBold(structuredText)} label="Copiar anamnese" />
         </div>
       )}
     </div>
