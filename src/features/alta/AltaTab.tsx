@@ -127,7 +127,8 @@ export function AltaTab({ patient }: { patient: Patient }) {
         <AttachmentList items={att.items} onRemove={att.remove} />
         {att.items.length > 0 && <AttachmentNotice />}
         <button className="btn-primary" disabled={!ready || ai.loading || att.busy} onClick={gerar}>
-          <Sparkles className="h-4 w-4" /> {ai.loading ? 'Gerando…' : ready ? 'Gerar alta hospitalar' : 'Carregando…'}
+          <Sparkles className="h-4 w-4" />{' '}
+          {ai.loading ? 'Gerando…' : !ready ? 'Carregando…' : ai.text ? 'Gerar novamente' : 'Gerar alta hospitalar'}
         </button>
 
         {ai.loading || ai.error ? (

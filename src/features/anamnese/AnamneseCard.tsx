@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Wand2, Save, Pencil, RefreshCw, FileText, Stethoscope, Loader2 } from 'lucide-react';
 import { useSession } from '@/store/session';
-import { getAnamnesis, saveAnamnesis, savePatient, listTasks, createTask } from '@/lib/remoteRepo';
+import {
+  getAnamnesis,
+  saveAnamnesis,
+  savePatient,
+  listTasks,
+  createTask,
+  addLabResult,
+  saveChatMessage,
+} from '@/lib/remoteRepo';
 import {
   buildPatientContext,
   extractOrganizerJson,
   extractPendencias,
+  extractLabs,
+  extractPrescricao,
   parseOrganizerOutput,
 } from '@/lib/context';
 import { SETTING_LABEL } from '@/lib/types';
+import { todayISO, fmtBR } from '@/lib/dates';
 import { useAiStream } from '@/hooks/useAiStream';
 import { useAttachments } from '@/hooks/useAttachments';
 import { AiOutput } from '@/components/AiOutput';
@@ -62,25 +73,58 @@ export function AnamneseCard({
   const structuredText = structured?.text ?? '';
   const analysisText = structured?.analysis ?? '';
 
-  /** Cria pendências novas a partir do que a IA inferiu do caso (sem duplicar). */
-  async function autoPendencias(aiText: string) {
+  /** Distribui automaticamente o que a IA extraiu: pendências, labs (curva) e prescrição. */
+  async function autoDistribuir(aiText: string) {
     if (!key) return;
+    // Pendências (sem duplicar)
     const itens = extractPendencias(aiText);
-    if (!itens.length) return;
-    const existentes = await listTasks(key, patient.id);
-    const norm = (s: string) => s.trim().toLowerCase();
-    const jaTem = new Set(existentes.map((t) => norm(t.description)));
-    const novas = itens.filter((d) => !jaTem.has(norm(d)));
-    for (const d of novas) {
-      await createTask(key, { patientId: patient.id, description: d, urgent: false, dueDate: null });
+    if (itens.length) {
+      const existentes = await listTasks(key, patient.id);
+      const norm = (s: string) => s.trim().toLowerCase();
+      const jaTem = new Set(existentes.map((t) => norm(t.description)));
+      const novas = itens.filter((d) => !jaTem.has(norm(d)));
+      for (const d of novas) {
+        await createTask(key, { patientId: patient.id, description: d, urgent: false, dueDate: null });
+      }
+      if (novas.length) onTasksChanged?.();
     }
-    if (novas.length) onTasksChanged?.();
+    // Laboratoriais → curva
+    for (const lab of extractLabs(aiText)) {
+      if (!lab.date || !lab.values?.length) continue;
+      await addLabResult(key, {
+        patientId: patient.id,
+        date: lab.date,
+        values: lab.values.map((v) => ({
+          name: v.name,
+          value: v.value,
+          unit: v.unit ?? '',
+          flag: v.flag ?? null,
+        })),
+      });
+    }
+    // Prescrição transcrita → salva na aba Prescrição
+    const rx = extractPrescricao(aiText);
+    if (rx) {
+      await saveChatMessage(key, {
+        patientId: patient.id,
+        role: 'assistant',
+        content: rx,
+        channel: 'prescricao',
+        topic: fmtBR(todayISO()),
+      });
+    }
   }
 
   async function organizar() {
     if (!key || (!raw.trim() && att.items.length === 0)) return;
-    const cenario = `Cenário: ${SETTING_LABEL[patient.setting]}. Use o formato de ${SETTING_LABEL[patient.setting]}.`;
-    const texto = [cenario, raw.trim() || 'Organize a anamnese/admissão a partir da imagem/PDF anexado.'].join('\n\n');
+    const cenario =
+      `Cenário: ${SETTING_LABEL[patient.setting]}. Use o formato de ${SETTING_LABEL[patient.setting]}. ` +
+      `Data de hoje: ${fmtBR(todayISO())}.`;
+    const texto = [
+      cenario,
+      raw.trim() ||
+        'Organize a anamnese/admissão a partir da imagem/PDF anexado (incluindo prescrição e exames, se houver).',
+    ].join('\n\n');
     const content = att.items.length
       ? ([
           { type: 'text', text: texto },
@@ -151,7 +195,7 @@ export function AnamneseCard({
       await saveAnamnesis(key, a);
       setAnamnesis(a);
       onAnalysis?.(analysis);
-      await autoPendencias(aiText);
+      await autoDistribuir(aiText);
       ai.reset();
       setMode('view');
     } finally {
@@ -200,11 +244,13 @@ export function AnamneseCard({
       {mode === 'input' && (
         <div className="space-y-3">
           <p className="text-sm text-muted">
-            Cole o texto bruto da admissão/anamnese. Não inclua nome completo, CPF ou nº de prontuário.
+            Cole a anamnese/admissão e anexe os <strong>prints de prescrição e exames</strong> — de uma vez. O app
+            preenche sozinho a anamnese, os problemas, o laboratório (curva), a prescrição, as pendências e a análise.
+            Não inclua nome completo, CPF ou nº de prontuário.
           </p>
           <textarea
             className="input min-h-[160px] font-mono text-xs"
-            placeholder="Cole aqui a anamnese/admissão (ou anexe/cole uma foto/PDF)…"
+            placeholder="Cole aqui a anamnese/admissão + prescrição/exames (ou anexe/cole fotos/PDF)…"
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
             onPaste={(e) => {

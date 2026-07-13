@@ -110,7 +110,8 @@ export function PrescricaoTab({ patient }: { patient: Patient }) {
         <AttachmentList items={att.items} onRemove={att.remove} />
         {att.items.length > 0 && <AttachmentNotice />}
         <button className="btn-primary" disabled={ai.loading || att.busy} onClick={gerar}>
-          <Sparkles className="h-4 w-4" /> {ai.loading ? 'Gerando…' : 'Transcrever e criticar'}
+          <Sparkles className="h-4 w-4" />{' '}
+          {ai.loading ? 'Gerando…' : ai.text ? 'Gerar novamente' : 'Transcrever e criticar'}
         </button>
 
         {ai.loading || ai.error ? (

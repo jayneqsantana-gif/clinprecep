@@ -205,7 +205,8 @@ export function EvolucaoDiaria({
           disabled={(!dailyInput.trim() && att.items.length === 0) || gen.loading || saving || att.busy}
           onClick={gerar}
         >
-          <Sparkles className="h-4 w-4" /> {gen.loading ? 'Gerando…' : 'Gerar evolução'}
+          <Sparkles className="h-4 w-4" />{' '}
+          {gen.loading ? 'Gerando…' : gen.text ? 'Gerar novamente' : 'Gerar evolução'}
         </button>
 
         {/* Anamnese/evolução atualizada, pronta para copiar */}

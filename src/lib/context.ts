@@ -89,12 +89,19 @@ export function extractLabs(text: string): ExtractedLab[] {
   }
 }
 
-/** Remove todos os blocos de metadados (<json>, <pendencias>, <labs>) do texto exibido. */
+/** Extrai o bloco <prescricao>...</prescricao> (prescrição transcrita) do organizador. */
+export function extractPrescricao(text: string): string {
+  const m = text.match(/<prescricao>([\s\S]*?)<\/prescricao>/i);
+  return m ? m[1].trim() : '';
+}
+
+/** Remove todos os blocos de metadados (<json>, <pendencias>, <labs>, <prescricao>) do texto exibido. */
 export function stripOrganizerJson(text: string): string {
   return text
     .replace(/<json>[\s\S]*?<\/json>/i, '')
     .replace(/<pendencias>[\s\S]*?<\/pendencias>/i, '')
     .replace(/<labs>[\s\S]*?<\/labs>/i, '')
+    .replace(/<prescricao>[\s\S]*?<\/prescricao>/i, '')
     .trim();
 }
 

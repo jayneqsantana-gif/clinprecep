@@ -38,7 +38,8 @@ export function AtualizacoesTab({ patient }: { patient: Patient }) {
             : 'Organize a anamnese para extrair os problemas e direcionar a busca.'}
         </p>
         <button className="btn-primary" disabled={ai.loading} onClick={gerar}>
-          <Sparkles className="h-4 w-4" /> {ai.loading ? 'Buscando…' : 'Buscar atualizações'}
+          <Sparkles className="h-4 w-4" />{' '}
+          {ai.loading ? 'Buscando…' : ai.text ? 'Buscar novamente' : 'Buscar atualizações'}
         </button>
         <AiOutput text={ai.text} loading={ai.loading} error={ai.error} citations={ai.citations} />
       </div>

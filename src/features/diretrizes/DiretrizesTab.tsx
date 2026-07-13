@@ -97,7 +97,8 @@ export function DiretrizesTab({ patient, initialTopic = '' }: { patient: Patient
         )}
 
         <button className="btn-primary" disabled={ai.loading || !problem.trim()} onClick={gerar}>
-          <Sparkles className="h-4 w-4" /> {ai.loading ? 'Buscando…' : 'Gerar revisão da diretriz'}
+          <Sparkles className="h-4 w-4" />{' '}
+          {ai.loading ? 'Buscando…' : ai.text ? 'Gerar novamente' : 'Gerar revisão da diretriz'}
         </button>
 
         <AiOutput text={ai.text} loading={ai.loading} error={ai.error} citations={ai.citations} />

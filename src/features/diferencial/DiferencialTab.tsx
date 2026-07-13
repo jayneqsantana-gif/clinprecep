@@ -61,7 +61,8 @@ export function DiferencialTab({ patient }: { patient: Patient }) {
         )}
 
         <button className="btn-primary" disabled={ai.loading || !problem.trim()} onClick={gerar}>
-          <Sparkles className="h-4 w-4" /> {ai.loading ? 'Gerando…' : 'Gerar diferencial'}
+          <Sparkles className="h-4 w-4" />{' '}
+          {ai.loading ? 'Gerando…' : ai.text ? 'Gerar novamente' : 'Gerar diferencial'}
         </button>
 
         <AiOutput text={ai.text} loading={ai.loading} error={ai.error} citations={ai.citations} />
