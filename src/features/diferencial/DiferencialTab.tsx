@@ -4,6 +4,7 @@ import { useAiStream } from '@/hooks/useAiStream';
 import { usePatientAiContext } from '@/hooks/usePatientAiContext';
 import { AiOutput } from '@/components/AiOutput';
 import { Disclaimer } from '@/components/ui';
+import { ProblemTargetPicker } from '@/features/anamnese/ProblemTargetPicker';
 import type { Patient } from '@/lib/types';
 
 /** Diagnóstico diferencial em 3 camadas (seção 7.5), via agente Diferencial. */
@@ -36,29 +37,13 @@ export function DiferencialTab({ patient }: { patient: Patient }) {
           <Split className="h-4 w-4 text-brand" /> Diagnóstico diferencial
         </div>
 
-        {ativos.length > 0 ? (
-          <div>
-            <label className="label">Problema a analisar</label>
-            <select className="input" value={problem} onChange={(e) => setProblem(e.target.value)}>
-              {ativos.map((p) => (
-                <option key={p.id} value={p.title}>{p.title}</option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div>
-            <label className="label">Problema a analisar</label>
-            <input
-              className="input"
-              placeholder="Ex.: dispneia + hipoxemia"
-              value={problem}
-              onChange={(e) => setProblem(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-muted">
-              Dica: organize a anamnese na Visão Geral para extrair a lista de problemas.
-            </p>
-          </div>
-        )}
+        <ProblemTargetPicker
+          problems={patient.problemList}
+          value={problem}
+          onChange={setProblem}
+          label="Problema / síndrome a analisar"
+          placeholder="Ex.: dor torácica com supra de ST"
+        />
 
         <button className="btn-primary" disabled={ai.loading || !problem.trim()} onClick={gerar}>
           <Sparkles className="h-4 w-4" />{' '}

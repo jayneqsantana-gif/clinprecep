@@ -7,6 +7,7 @@ import { AiOutput } from '@/components/AiOutput';
 import { SourceLinks } from '@/components/SourceLinks';
 import { Markdown } from '@/components/Markdown';
 import { CopyButton } from '@/components/ui';
+import { ProblemTargetPicker } from '@/features/anamnese/ProblemTargetPicker';
 import { listChatMessages, saveChatMessage, deleteChatMessage } from '@/lib/remoteRepo';
 import { fmtBR } from '@/lib/dates';
 import type { Patient, ChatMessage } from '@/lib/types';
@@ -68,33 +69,7 @@ export function DiretrizesTab({ patient, initialTopic = '' }: { patient: Patient
           <BookOpen className="h-4 w-4 text-brand" /> Diretrizes por problema
         </div>
 
-        {ativos.length > 0 ? (
-          <div>
-            <label className="label">Problema / tema</label>
-            <input
-              className="input"
-              list="problemas-ativos"
-              value={problem}
-              onChange={(e) => setProblem(e.target.value)}
-              placeholder="Ex.: insuficiência cardíaca com FE reduzida"
-            />
-            <datalist id="problemas-ativos">
-              {ativos.map((p) => (
-                <option key={p.id} value={p.title} />
-              ))}
-            </datalist>
-          </div>
-        ) : (
-          <div>
-            <label className="label">Tópico / problema</label>
-            <input
-              className="input"
-              placeholder="Ex.: insuficiência cardíaca com FE reduzida"
-              value={problem}
-              onChange={(e) => setProblem(e.target.value)}
-            />
-          </div>
-        )}
+        <ProblemTargetPicker problems={patient.problemList} value={problem} onChange={setProblem} />
 
         <button className="btn-primary" disabled={ai.loading || !problem.trim()} onClick={gerar}>
           <Sparkles className="h-4 w-4" />{' '}
@@ -143,7 +118,7 @@ function SavedReview({ review, onDeleted }: { review: ChatMessage; onDeleted: ()
       {open && (
         <div className="mt-3 space-y-2 border-t border-border pt-3">
           <Markdown>{review.content}</Markdown>
-          {review.citations.length > 0 && (
+          {(review.citations?.length ?? 0) > 0 && (
             <div className="border-t border-border pt-2">
               <p className="mb-1 text-xs font-semibold text-muted">Fontes</p>
               <ul className="space-y-1">
