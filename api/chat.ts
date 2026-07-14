@@ -133,10 +133,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!r.ok || !r.body) {
       const txt = await r.text().catch(() => '');
-      let msg = 'Falha ao gerar a resposta de IA.';
-      if (r.status === 429) msg = 'Limite gratuito da IA atingido. Aguarde um instante e tente novamente.';
-      else if (r.status === 400 && /API key/i.test(txt)) msg = 'Chave da IA inválida. Verifique a GEMINI_API_KEY na Vercel.';
-      console.error('[api/chat] Gemini erro:', r.status, txt.slice(0, 300));
+      const detalhe = txt.replace(/\s+/g, ' ').slice(0, 300);
+      let msg: string;
+      if (r.status === 429) {
+        msg = 'Limite gratuito da IA atingido. Aguarde ~1 minuto e tente novamente.';
+      } else if (r.status === 403 || /API_KEY_INVALID|API key not valid|permission|PERMISSION_DENIED|has not been used|is disabled/i.test(txt)) {
+        msg =
+          'Chave da IA inválida ou API não habilitada. Crie a chave em aistudio.google.com, coloque em GEMINI_API_KEY na Vercel e refaça o deploy. ' +
+          `(${r.status}: ${detalhe})`;
+      } else if (r.status === 404) {
+        msg = `Modelo de IA indisponível para esta chave. (${r.status}: ${detalhe})`;
+      } else {
+        msg = `Falha na IA (${r.status}): ${detalhe}`;
+      }
+      console.error('[api/chat] Gemini erro:', r.status, detalhe);
       send({ type: 'error', message: msg });
       res.end();
       return;
@@ -197,7 +207,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     const e = err as { name?: string; message?: string };
     console.error('[api/chat] erro de IA:', e?.name, e?.message);
-    send({ type: 'error', message: 'Falha ao gerar a resposta de IA.' });
+    send({ type: 'error', message: `Falha ao chamar a IA: ${e?.message || e?.name || 'erro desconhecido'}` });
   } finally {
     res.end();
   }
