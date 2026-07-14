@@ -133,13 +133,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!r.ok || !r.body) {
       const txt = await r.text().catch(() => '');
-      const detalhe = txt.replace(/\s+/g, ' ').slice(0, 300);
+      const detalhe = txt.replace(/\s+/g, ' ').slice(0, 500);
       let msg: string;
       if (r.status === 429) {
         msg = 'Limite gratuito da IA atingido. Aguarde ~1 minuto e tente novamente.';
-      } else if (r.status === 403 || /API_KEY_INVALID|API key not valid|permission|PERMISSION_DENIED|has not been used|is disabled/i.test(txt)) {
+      } else if (/SERVICE_DISABLED|has not been used|is disabled/i.test(txt)) {
         msg =
-          'Chave da IA inválida ou API não habilitada. Crie a chave em aistudio.google.com, coloque em GEMINI_API_KEY na Vercel e refaça o deploy. ' +
+          'A API do Gemini NÃO está habilitada no projeto da sua chave. O jeito mais fácil: em aistudio.google.com/apikey clique em "Criar chave de API" → "Criar chave em um NOVO projeto", troque a GEMINI_API_KEY na Vercel e refaça o deploy. ' +
+          `(detalhe: ${detalhe})`;
+      } else if (r.status === 403 || /API_KEY_INVALID|API key not valid|permission|PERMISSION_DENIED/i.test(txt)) {
+        msg =
+          'Chave da IA inválida. Crie a chave em aistudio.google.com, coloque em GEMINI_API_KEY na Vercel e refaça o deploy. ' +
           `(${r.status}: ${detalhe})`;
       } else if (r.status === 404) {
         msg = `Modelo de IA indisponível para esta chave. (${r.status}: ${detalhe})`;
