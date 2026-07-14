@@ -60,22 +60,26 @@ export interface PlantaoCell {
   header: string;
   problems: string[];
   pendencias: string[];
+  /** Quantas pendências ficaram de fora (para o "+N"). */
+  extraPend?: number;
 }
 
 /** Monta o grid (3 colunas) da passagem de plantão a partir dos dados já estruturados. */
 export function plantaoGridHtml(cells: PlantaoCell[]): string {
+  const chk = '<span class="pt-chk"></span>';
   const cell = (c: PlantaoCell) => {
+    if (!c.header) return `<div class="pt-cell" style="border-style:dashed"></div>`;
     const probs = c.problems.length
       ? `<div class="pt-probs">${c.problems.map((p, i) => `<div>P${i + 1}. ${escapeHtml(p)}</div>`).join('')}</div>`
       : '';
     const pend = c.pendencias.length
-      ? `<div class="pt-pend"><div class="pt-pend-title">PENDÊNCIAS:</div>${c.pendencias
-          .map((p) => `<div>- ${escapeHtml(p)}</div>`)
-          .join('')}</div>`
+      ? `<div class="pt-pend"><span class="pt-pend-title">Pendências:</span> ${c.pendencias
+          .map((p) => escapeHtml(p))
+          .join(' · ')}${c.extraPend ? ` <span class="pt-more">(+${c.extraPend})</span>` : ''}</div>`
       : '';
-    return `<div class="pt-cell"><div class="pt-head">${escapeHtml(c.header)}</div><div class="pt-body">${probs}${pend}</div><div class="pt-foot"><span>Prescrição</span><span>Evolução</span><span>Exames</span></div></div>`;
+    return `<div class="pt-cell"><div class="pt-head">${escapeHtml(c.header)}</div><div class="pt-body">${probs}${pend}</div><div class="pt-foot"><span>${chk} Prescrição</span><span>${chk} Evolução</span><span>${chk} Exames</span></div></div>`;
   };
-  // Completa a última linha com células vazias para o grid fechar bonito.
+  // Completa a última linha com células vazias para o grid fechar alinhado.
   const filled = [...cells];
   while (filled.length % 3 !== 0) filled.push({ header: '', problems: [], pendencias: [] });
   return `<div class="pt-grid">${filled.map(cell).join('')}</div>`;
@@ -96,18 +100,21 @@ const PRINT_CSS = `
   .patient h2 { border: 0; margin-top: 0; }
   strong { font-weight: 700; }
 
-  /* Grid da passagem de plantão (leito a leito) — enxuto, cabe em 1 página */
-  .pt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid #000; border-left: 1px solid #000; }
-  .pt-cell { border-right: 1px solid #000; border-bottom: 1px solid #000; display: flex; flex-direction: column; break-inside: avoid; page-break-inside: avoid; }
-  .pt-head { border-bottom: 1px solid #000; padding: 0.8mm 1.5mm; font-weight: 700; font-size: 8.5pt; background: #f2f2f2; }
-  .pt-body { flex: 1; padding: 1mm 1.5mm; font-size: 8pt; line-height: 1.25; }
-  .pt-probs { font-weight: 700; margin-bottom: 1mm; }
-  .pt-probs div, .pt-pend div { margin: 0.2mm 0; }
-  .pt-pend { font-weight: 400; }
-  .pt-pend-title { font-weight: 700; margin-top: 0.6mm; }
-  .pt-foot { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #000; font-size: 7pt; color: #444; }
-  .pt-foot span { text-align: center; padding: 0.6mm 0; border-right: 1px solid #ccc; }
-  .pt-foot span:last-child { border-right: 0; }`;
+  /* Grid da passagem de plantão (leito a leito) — enxuto, cards arredondados */
+  .pt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+  .pt-cell { border: 0.4mm solid #cfd6e0; border-radius: 2.5mm; overflow: hidden; display: flex; flex-direction: column; break-inside: avoid; page-break-inside: avoid; background: #fff; }
+  .pt-head { padding: 1.2mm 2mm; font-weight: 700; font-size: 8.5pt; background: #eef2f7; border-bottom: 0.4mm solid #cfd6e0; }
+  .pt-body { flex: 1; padding: 1.4mm 2mm; font-size: 8pt; line-height: 1.28; }
+  .pt-probs { font-weight: 700; }
+  .pt-probs div { margin: 0.2mm 0; }
+  .pt-pend { margin-top: 1mm; font-weight: 400; color: #333; }
+  .pt-pend-title { font-weight: 700; color: #111; }
+  .pt-pend div { margin: 0.2mm 0; }
+  .pt-more { color: #667; font-style: italic; }
+  .pt-foot { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 0.4mm solid #cfd6e0; font-size: 7pt; color: #333; background: #fafbfc; }
+  .pt-foot span { display: flex; align-items: center; justify-content: center; gap: 1mm; padding: 1mm 0; border-right: 0.3mm solid #dfe4ea; }
+  .pt-foot span:last-child { border-right: 0; }
+  .pt-chk { display: inline-block; width: 2.6mm; height: 2.6mm; border: 0.4mm solid #556; border-radius: 0.7mm; }`;
 
 /**
  * Imprime via IFRAME OCULTO na própria página (sem abrir pop-up — não é bloqueado
