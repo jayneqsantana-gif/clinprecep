@@ -22,6 +22,7 @@ import { SETTING_LABEL } from '@/lib/types';
 import { todayISO, fmtBR } from '@/lib/dates';
 import { useAiStream } from '@/hooks/useAiStream';
 import { useAttachments } from '@/hooks/useAttachments';
+import { useDraft } from '@/hooks/useDraft';
 import { AiOutput } from '@/components/AiOutput';
 import { AttachButton, AttachmentList, AttachmentNotice } from '@/components/Attachments';
 import { imagesFromPaste, type ContentBlock } from '@/lib/attachments';
@@ -53,7 +54,7 @@ export function AnamneseCard({
   const att = useAttachments();
   const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [raw, setRaw] = useState('');
+  const [raw, setRaw, clearRaw] = useDraft(`draft.anam.${patient.id}`);
   const [mode, setMode] = useState<'view' | 'input' | 'edit'>('input');
   const [editText, setEditText] = useState('');
   const [saving, setSaving] = useState(false);
@@ -139,6 +140,7 @@ export function AnamneseCard({
     if (!result) return; // erro/abort já tratado pelo AiOutput
     await persistir(result, raw);
     att.clear();
+    clearRaw(); // já organizou e salvou — pode limpar o rascunho
   }
 
   async function persistir(aiText: string, rawText: string) {

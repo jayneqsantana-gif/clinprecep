@@ -50,11 +50,11 @@ export function PinGate({ mode }: Props) {
             <Lock className="h-8 w-8 text-brand" />
           )}
         </div>
-        <h1 className="text-xl font-bold">{isSetup ? 'Crie seu PIN' : 'ClinPrecep bloqueado'}</h1>
+        <h1 className="text-xl font-bold">{isSetup ? 'Crie seu PIN' : 'Digite seu PIN'}</h1>
         <p className="text-sm text-muted">
           {isSetup
-            ? 'Ele protege e criptografa os dados neste dispositivo. Guarde-o: sem o PIN, os dados não podem ser recuperados.'
-            : 'Digite seu PIN para desbloquear.'}
+            ? 'Ele criptografa seus dados. Guarde-o: sem o PIN, os dados não podem ser recuperados. Vou lembrá-lo neste aparelho e não pedir de novo.'
+            : 'Só desta vez — depois vou lembrar dele neste aparelho e não pedir mais.'}
         </p>
       </div>
 

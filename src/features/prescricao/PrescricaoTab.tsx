@@ -3,6 +3,7 @@ import { Pill, Sparkles, AlertOctagon, ChevronDown, ChevronRight, Trash2, Clipbo
 import { useSession } from '@/store/session';
 import { useAiStream } from '@/hooks/useAiStream';
 import { useAttachments } from '@/hooks/useAttachments';
+import { useDraft } from '@/hooks/useDraft';
 import { usePatientAiContext } from '@/hooks/usePatientAiContext';
 import { AiOutput } from '@/components/AiOutput';
 import { AttachButton, AttachmentList, AttachmentNotice } from '@/components/Attachments';
@@ -29,7 +30,7 @@ export function PrescricaoTab({ patient }: { patient: Patient }) {
   const ai = useAiStream();
   const att = useAttachments();
   const { context } = usePatientAiContext(patient);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useDraft(`draft.rx.${patient.id}`);
   const [saved, setSaved] = useState<ChatMessage[]>([]);
 
   async function refresh() {

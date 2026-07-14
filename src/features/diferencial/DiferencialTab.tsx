@@ -1,22 +1,36 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Split, Sparkles } from 'lucide-react';
+import { useSession } from '@/store/session';
 import { useAiStream } from '@/hooks/useAiStream';
 import { usePatientAiContext } from '@/hooks/usePatientAiContext';
 import { AiOutput } from '@/components/AiOutput';
 import { Disclaimer } from '@/components/ui';
+import { SavedList } from '@/components/SavedList';
 import { ProblemTargetPicker } from '@/features/anamnese/ProblemTargetPicker';
-import type { Patient } from '@/lib/types';
+import { listChatMessages, saveChatMessage } from '@/lib/remoteRepo';
+import type { Patient, ChatMessage } from '@/lib/types';
 
-/** Diagnóstico diferencial em 3 camadas (seção 7.5), via agente Diferencial. */
+/** Diagnóstico diferencial por síndrome/achado (seção 7.5). Os DDs gerados ficam salvos. */
 export function DiferencialTab({ patient }: { patient: Patient }) {
+  const key = useSession((s) => s.key);
   const ai = useAiStream();
   const { context } = usePatientAiContext(patient);
   const ativos = patient.problemList.filter((p) => p.status === 'ativo');
   const [problem, setProblem] = useState<string>(ativos[0]?.title ?? '');
+  const [saved, setSaved] = useState<ChatMessage[]>([]);
+
+  async function refresh() {
+    if (!key) return;
+    setSaved((await listChatMessages(key, patient.id, 'diferencial')).reverse());
+  }
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, patient.id]);
 
   async function gerar() {
     const alvo = problem.trim() || ativos[0]?.title || 'problema principal';
-    await ai.run({
+    const result = await ai.run({
       agent: 'diferencial',
       systemExtra: context(),
       messages: [
@@ -26,6 +40,17 @@ export function DiferencialTab({ patient }: { patient: Patient }) {
         },
       ],
     });
+    if (result && key) {
+      await saveChatMessage(key, {
+        patientId: patient.id,
+        role: 'assistant',
+        content: result,
+        citations: ai.citationsRef.current,
+        channel: 'diferencial',
+        topic: alvo,
+      });
+      await refresh();
+    }
   }
 
   return (
@@ -52,6 +77,8 @@ export function DiferencialTab({ patient }: { patient: Patient }) {
 
         <AiOutput text={ai.text} loading={ai.loading} error={ai.error} citations={ai.citations} />
       </div>
+
+      <SavedList items={saved} title="Diferenciais salvos" onDeleted={refresh} />
     </div>
   );
 }

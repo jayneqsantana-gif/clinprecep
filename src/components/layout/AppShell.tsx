@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Users, BookOpen, Calculator, Settings, Lock } from 'lucide-react';
-import { useSession } from '@/store/session';
+import { Users, BookOpen, Calculator, Settings } from 'lucide-react';
 
 const nav = [
   { to: '/pacientes', label: 'Prontuários', icon: Users },
@@ -11,8 +10,6 @@ const nav = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const lock = useSession((s) => s.lock);
-
   return (
     <div className="mx-auto flex min-h-full max-w-6xl flex-col">
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg/90 px-4 py-3 backdrop-blur">
@@ -20,9 +17,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <img src="/icons/icon.svg" alt="" className="h-6 w-6" />
           <span className="font-bold tracking-tight">ClinPrecep</span>
         </div>
-        <button className="btn-ghost text-xs" onClick={lock} title="Bloquear app">
-          <Lock className="h-4 w-4" /> Bloquear
-        </button>
       </header>
 
       <main className="flex-1 px-4 py-4 pb-24">{children}</main>

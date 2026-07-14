@@ -3,6 +3,7 @@ import { LogOut, Sparkles, Printer, ChevronDown, ChevronRight, Trash2 } from 'lu
 import { useSession } from '@/store/session';
 import { useAiStream } from '@/hooks/useAiStream';
 import { useAttachments } from '@/hooks/useAttachments';
+import { useDraft } from '@/hooks/useDraft';
 import { AiOutput } from '@/components/AiOutput';
 import { AttachButton, AttachmentList, AttachmentNotice } from '@/components/Attachments';
 import { ClinicalText, stripBold } from '@/components/ClinicalText';
@@ -28,7 +29,7 @@ export function AltaTab({ patient }: { patient: Patient }) {
   const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
   const [evos, setEvos] = useState<Evolution[]>([]);
   const [ready, setReady] = useState(false);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useDraft(`draft.alta.${patient.id}`);
   const [saved, setSaved] = useState<ChatMessage[]>([]);
 
   async function refresh() {

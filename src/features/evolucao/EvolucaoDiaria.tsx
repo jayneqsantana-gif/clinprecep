@@ -21,6 +21,7 @@ import {
 } from '@/lib/context';
 import { useAiStream } from '@/hooks/useAiStream';
 import { useAttachments } from '@/hooks/useAttachments';
+import { useDraft } from '@/hooks/useDraft';
 import { AiOutput } from '@/components/AiOutput';
 import { AttachButton, AttachmentList, AttachmentNotice } from '@/components/Attachments';
 import { CaseAnalysisBlocks } from '@/features/anamnese/CaseAnalysisBlocks';
@@ -47,7 +48,7 @@ export function EvolucaoDiaria({
   const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
   const [history, setHistory] = useState<Evolution[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [dailyInput, setDailyInput] = useState('');
+  const [dailyInput, setDailyInput, clearDailyInput] = useDraft(`draft.evo.${patient.id}`);
   const [saving, setSaving] = useState(false);
   const [savedAnalysis, setSavedAnalysis] = useState('');
 
@@ -162,7 +163,7 @@ export function EvolucaoDiaria({
       await aplicarPendencias(gen.text);
 
       setSavedAnalysis(analysis);
-      setDailyInput('');
+      clearDailyInput();
       att.clear();
       gen.reset();
       await refresh();

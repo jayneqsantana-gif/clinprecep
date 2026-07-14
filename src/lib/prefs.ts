@@ -7,6 +7,7 @@ const K = {
   theme: 'clinprecep.theme',
   timeout: 'clinprecep.timeoutMin',
   term: 'clinprecep.termAccepted',
+  pin: 'clinprecep.pin',
 } as const;
 
 export function getTheme(): 'dark' | 'light' {
@@ -18,8 +19,20 @@ export function setTheme(v: 'dark' | 'light') {
 }
 
 export function getTimeoutMin(): number {
+  // 0 = nunca bloquear por inatividade (padrão) — trocar de janela não derruba a sessão.
   const v = localStorage.getItem(K.timeout);
-  return v == null ? 10 : Number(v);
+  return v == null ? 0 : Number(v);
+}
+
+/** PIN lembrado neste aparelho (para não pedir toda vez). Só fica no dispositivo. */
+export function getSavedPin(): string | null {
+  return localStorage.getItem(K.pin);
+}
+export function setSavedPin(pin: string) {
+  localStorage.setItem(K.pin, pin);
+}
+export function clearSavedPin() {
+  localStorage.removeItem(K.pin);
 }
 export function setTimeoutMin(v: number) {
   localStorage.setItem(K.timeout, String(v));

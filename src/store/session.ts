@@ -16,7 +16,7 @@ import {
   type Cipher,
 } from '@/lib/crypto';
 import { supabase } from '@/lib/supabase';
-import { getTimeoutMin } from '@/lib/prefs';
+import { getTimeoutMin, getSavedPin, setSavedPin, clearSavedPin } from '@/lib/prefs';
 
 type Status = 'idle' | 'loading' | 'needs-setup' | 'locked' | 'unlocked';
 
@@ -67,12 +67,21 @@ export const useSession = create<SessionState>((set, get) => {
       }
       if (!data) {
         set({ status: 'needs-setup', salt: null, verifier: null });
+        // Aparelho já configurado antes? Recria a vault com o PIN lembrado.
+        const saved = getSavedPin();
+        if (saved) await get().setupPin(saved);
       } else {
         set({
           status: 'locked',
           salt: (data as { salt: string }).salt,
           verifier: (data as { verifier: Cipher }).verifier,
         });
+        // Desbloqueio automático se o PIN estiver lembrado neste aparelho.
+        const saved = getSavedPin();
+        if (saved) {
+          const ok = await get().unlock(saved);
+          if (!ok) clearSavedPin(); // PIN salvo não confere mais → pede de novo
+        }
       }
     },
 
@@ -90,6 +99,7 @@ export const useSession = create<SessionState>((set, get) => {
         return;
       }
       set({ key, salt, verifier, status: 'unlocked', error: null });
+      setSavedPin(pin); // lembra neste aparelho (não pede de novo)
       armTimer();
     },
 
@@ -106,6 +116,7 @@ export const useSession = create<SessionState>((set, get) => {
         return false;
       }
       set({ key, status: 'unlocked', error: null });
+      setSavedPin(pin); // lembra neste aparelho (não pede de novo)
       armTimer();
       return true;
     },
