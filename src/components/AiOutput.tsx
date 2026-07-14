@@ -26,8 +26,8 @@ export function AiOutput({
           <p className="text-text">{error}</p>
           {semChave && (
             <p className="mt-1 text-muted">
-              A IA ainda não está ligada — falta a chave da Anthropic no servidor. O restante do app
-              (organizar manualmente, salvar) funciona normalmente.
+              A IA ainda não está ligada — falta a chave do Gemini no servidor. O restante do app
+              (editar manualmente, salvar) funciona normalmente.
             </p>
           )}
         </div>

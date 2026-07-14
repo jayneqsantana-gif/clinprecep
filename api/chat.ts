@@ -1,33 +1,57 @@
 /**
- * Função serverless de IA (Vercel). Seções 4 e 8.
+ * Função serverless de IA (Vercel) — agora usando o Google Gemini (camada gratuita).
  *
- * - A ANTHROPIC_API_KEY vive só aqui no servidor; nunca vai ao cliente.
- * - Valida o usuário pelo token do Supabase antes de gastar a chave.
+ * - A GEMINI_API_KEY vive só aqui no servidor; nunca vai ao cliente.
+ * - Valida o usuário pelo token do Supabase antes de usar a chave.
  * - Não registra o conteúdo clínico (sem logs de payload).
- * - Faz streaming (SSE) das respostas da Anthropic.
+ * - Faz streaming (SSE) das respostas do Gemini, no MESMO formato de eventos que
+ *   o front já entende ({type:'text'|'citations'|'error'|'done'}).
+ *
+ * O contrato com o front é idêntico ao anterior (agent, messages, systemExtra):
+ * a conversão de blocos (texto/imagem/PDF) e a busca web (Google Search grounding)
+ * acontecem aqui dentro.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS } from './_agents.js';
 
-// Fluid Compute (padrão em projetos novos) permite até 300s no plano Hobby —
-// necessário para os agentes com web search (diretrizes/atualizações).
+// Streaming pode levar alguns segundos; mantém a folga do plano.
 export const config = { maxDuration: 300 };
 
-const DEFAULT_MODEL = process.env.CLINPRECEP_MODEL || 'claude-sonnet-5';
-const MODEL_ALLOWLIST = new Set(['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5']);
+const DEFAULT_MODEL = process.env.CLINPRECEP_MODEL || 'gemini-2.5-flash';
+const MODEL_ALLOWLIST = new Set(['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash']);
 
-function webSearchTool(model: string, maxUses: number) {
-  const type = model === 'claude-haiku-4-5' ? 'web_search_20250305' : 'web_search_20260209';
-  return { type, name: 'web_search', max_uses: maxUses };
+const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// ── Tipos mínimos do que recebemos do front (blocos no formato "Anthropic-like") ──
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+  | { type: 'document'; source: { type: 'base64'; media_type: string; data: string } };
+type MsgContent = string | ContentBlock[];
+
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
+}
+
+/** Converte o conteúdo de uma mensagem (texto ou blocos) em `parts` do Gemini. */
+function toGeminiParts(content: MsgContent): GeminiPart[] {
+  if (typeof content === 'string') return [{ text: content }];
+  const parts: GeminiPart[] = [];
+  for (const b of content) {
+    if (b.type === 'text') parts.push({ text: b.text });
+    else if (b.type === 'image' || b.type === 'document') {
+      parts.push({ inlineData: { mimeType: b.source.media_type, data: b.source.data } });
+    }
+  }
+  return parts.length ? parts : [{ text: '' }];
 }
 
 /** Confirma que o token pertence a um usuário Supabase válido. */
 async function verifyUser(token: string | undefined): Promise<boolean> {
   const url = process.env.SUPABASE_URL;
   const anon = process.env.SUPABASE_ANON_KEY;
-  // Em dev sem envs de Supabase no servidor, não bloqueia.
-  if (!url || !anon) return true;
+  if (!url || !anon) return true; // em dev sem envs, não bloqueia
   if (!token) return false;
   try {
     const r = await fetch(`${url}/auth/v1/user`, {
@@ -45,9 +69,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    res.status(503).json({ error: 'IA não configurada. Defina ANTHROPIC_API_KEY na Vercel.' });
+    res.status(503).json({ error: 'IA não configurada. Defina GEMINI_API_KEY na Vercel.' });
     return;
   }
 
@@ -59,8 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { agent, messages, model, systemExtra } = (req.body ?? {}) as {
     agent?: string;
-    // content pode ser string ou blocos (texto + imagem/PDF).
-    messages?: { role: 'user' | 'assistant'; content: unknown }[];
+    messages?: { role: 'user' | 'assistant'; content: MsgContent }[];
     model?: string;
     systemExtra?: string;
   };
@@ -77,36 +100,100 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const useModel = model && MODEL_ALLOWLIST.has(model) ? model : DEFAULT_MODEL;
   const system = systemExtra ? `${cfg.system}\n\n---\nContexto do paciente:\n${systemExtra}` : cfg.system;
-  const tools = cfg.webSearch ? [webSearchTool(useModel, cfg.maxUses ?? 5)] : undefined;
-  const maxTokens = cfg.maxTokens ?? 16000;
+
+  // Monta o corpo do Gemini.
+  const body: Record<string, unknown> = {
+    systemInstruction: { parts: [{ text: system }] },
+    // Gemini usa papéis 'user' e 'model' (assistant → model).
+    contents: messages.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: toGeminiParts(m.content),
+    })),
+    generationConfig: {
+      maxOutputTokens: cfg.maxTokens ?? 16000,
+      // Desliga o "thinking" interno: as respostas já são estruturadas pelos prompts,
+      // e isso mantém a saída completa e rápida dentro da cota gratuita.
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  };
+  if (cfg.webSearch) body.tools = [{ googleSearch: {} }];
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
-
   const send = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const client = new Anthropic({ apiKey });
 
   try {
-    // A tipagem do SDK 0.65 é anterior a `adaptive` e `output_config`; enviamos
-    // assim mesmo (a API aceita em runtime) e evitamos o erro de compilação.
-    const streamBody = {
-      model: useModel,
-      max_tokens: maxTokens,
-      thinking: { type: cfg.thinking === 'disabled' ? 'disabled' : 'adaptive' },
-      output_config: { effort: cfg.effort },
-      system,
-      tools,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    const url = `${API_BASE}/${encodeURIComponent(useModel)}:streamGenerateContent?alt=sse`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify(body),
+    });
+
+    if (!r.ok || !r.body) {
+      const txt = await r.text().catch(() => '');
+      let msg = 'Falha ao gerar a resposta de IA.';
+      if (r.status === 429) msg = 'Limite gratuito da IA atingido. Aguarde um instante e tente novamente.';
+      else if (r.status === 400 && /API key/i.test(txt)) msg = 'Chave da IA inválida. Verifique a GEMINI_API_KEY na Vercel.';
+      console.error('[api/chat] Gemini erro:', r.status, txt.slice(0, 300));
+      send({ type: 'error', message: msg });
+      res.end();
+      return;
+    }
+
+    const citations: { sourceName: string; url: string; type: string }[] = [];
+    const seen = new Set<string>();
+    const addCitation = (uri?: string, title?: string) => {
+      if (!uri || seen.has(uri)) return;
+      seen.add(uri);
+      citations.push({ sourceName: title || uri, url: uri, type: 'artigo' });
     };
-    const stream = client.messages.stream(streamBody as never);
 
-    stream.on('text', (delta: string) => send({ type: 'text', text: delta }));
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // O Gemini separa eventos SSE com "\r\n\r\n"; aceitamos ambos os formatos.
+      const chunks = buffer.split(/\r?\n\r?\n/);
+      buffer = chunks.pop() ?? '';
+      for (const chunk of chunks) {
+        const line = chunk.trim();
+        if (!line.startsWith('data:')) continue;
+        const jsonStr = line.slice(5).trim();
+        if (!jsonStr || jsonStr === '[DONE]') continue;
+        let evt: Record<string, unknown>;
+        try {
+          evt = JSON.parse(jsonStr);
+        } catch {
+          continue;
+        }
+        const cand = (evt.candidates as Record<string, unknown>[] | undefined)?.[0];
+        if (!cand) {
+          // Bloqueio de segurança do prompt?
+          const pf = evt.promptFeedback as { blockReason?: string } | undefined;
+          if (pf?.blockReason) send({ type: 'error', message: 'A IA recusou o pedido (filtro de conteúdo).' });
+          continue;
+        }
+        const parts = (cand.content as { parts?: GeminiPart[] } | undefined)?.parts ?? [];
+        for (const p of parts) {
+          // Ignora partes de "pensamento" caso apareçam.
+          if ((p as { thought?: boolean }).thought) continue;
+          if (typeof p.text === 'string' && p.text) send({ type: 'text', text: p.text });
+        }
+        // Fontes (Google Search grounding).
+        const gm = cand.groundingMetadata as
+          | { groundingChunks?: { web?: { uri?: string; title?: string } }[] }
+          | undefined;
+        for (const gc of gm?.groundingChunks ?? []) addCitation(gc.web?.uri, gc.web?.title);
+      }
+    }
 
-    const final = await stream.finalMessage();
-    const citations = extractCitations(final);
     if (citations.length) send({ type: 'citations', citations });
-    send({ type: 'done', model: useModel, stopReason: final.stop_reason });
+    send({ type: 'done', model: useModel });
   } catch (err) {
     const e = err as { name?: string; message?: string };
     console.error('[api/chat] erro de IA:', e?.name, e?.message);
@@ -114,27 +201,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } finally {
     res.end();
   }
-}
-
-function extractCitations(message: { content?: unknown[] }) {
-  const out: { sourceName: string; url: string; type: string }[] = [];
-  const seen = new Set<string>();
-  const push = (url?: string, name?: string, type = 'artigo') => {
-    if (!url || seen.has(url)) return;
-    seen.add(url);
-    out.push({ sourceName: name || url, url, type });
-  };
-  for (const block of (message?.content ?? []) as Record<string, unknown>[]) {
-    if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
-      for (const r of block.content as Record<string, unknown>[]) {
-        if (r?.type === 'web_search_result') push(r.url as string, r.title as string);
-      }
-    }
-    if (block.type === 'text' && Array.isArray(block.citations)) {
-      for (const c of block.citations as Record<string, unknown>[]) {
-        push(c.url as string, (c.title || c.document_title) as string);
-      }
-    }
-  }
-  return out;
 }
