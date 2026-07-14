@@ -17,11 +17,18 @@ import { AGENTS } from './_agents.js';
 // Streaming pode levar alguns segundos; mantém a folga do plano.
 export const config = { maxDuration: 300 };
 
-const MODEL_ALLOWLIST = new Set(['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash']);
-// Só aceita CLINPRECEP_MODEL se for um modelo Gemini válido — assim uma variável
-// antiga (ex.: claude-sonnet-5, dos tempos da Anthropic) é ignorada em vez de quebrar.
+// Modelos Gemini candidatos, em ordem de preferência. O Google muda o catálogo
+// e alguns IDs "somem" para chaves novas — por isso usamos o alias `-latest`
+// (sempre aponta pro atual) + fallbacks, e tentamos cada um até um funcionar.
+const MODEL_CANDIDATES = [
+  'gemini-flash-latest',
+  'gemini-2.5-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-2.0-flash',
+];
+const MODEL_ALLOWLIST = new Set([...MODEL_CANDIDATES, 'gemini-2.5-flash']);
+// Só aceita CLINPRECEP_MODEL se for um modelo Gemini conhecido (ignora lixo antigo).
 const ENV_MODEL = process.env.CLINPRECEP_MODEL;
-const DEFAULT_MODEL = ENV_MODEL && MODEL_ALLOWLIST.has(ENV_MODEL) ? ENV_MODEL : 'gemini-2.5-flash';
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -101,25 +108,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const useModel = model && MODEL_ALLOWLIST.has(model) ? model : DEFAULT_MODEL;
   const system = systemExtra ? `${cfg.system}\n\n---\nContexto do paciente:\n${systemExtra}` : cfg.system;
 
-  // Monta o corpo do Gemini.
-  const generationConfig: Record<string, unknown> = { maxOutputTokens: cfg.maxTokens ?? 16000 };
-  // "thinking" só existe nos modelos 2.5; desligamos (respostas já estruturadas
-  // pelos prompts) para saída completa e rápida na cota gratuita.
-  if (useModel.includes('2.5')) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  /** Monta o corpo do Gemini para um modelo específico. */
+  function buildBody(useModel: string): Record<string, unknown> {
+    const is20 = useModel.includes('2.0');
+    const gen: Record<string, unknown> = { maxOutputTokens: cfg!.maxTokens ?? (is20 ? 8192 : 16000) };
+    // "thinking" não existe/não é aceito nos modelos 2.0; nos demais desligamos
+    // (respostas já estruturadas pelos prompts) para saída completa e rápida.
+    if (!is20) gen.thinkingConfig = { thinkingBudget: 0 };
+    const b: Record<string, unknown> = {
+      systemInstruction: { parts: [{ text: system }] },
+      contents: messages!.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: toGeminiParts(m.content),
+      })),
+      generationConfig: gen,
+    };
+    if (cfg!.webSearch) b.tools = [{ googleSearch: {} }];
+    return b;
+  }
 
-  const body: Record<string, unknown> = {
-    systemInstruction: { parts: [{ text: system }] },
-    // Gemini usa papéis 'user' e 'model' (assistant → model).
-    contents: messages.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: toGeminiParts(m.content),
-    })),
-    generationConfig,
-  };
-  if (cfg.webSearch) body.tools = [{ googleSearch: {} }];
+  // Ordem de tentativa: modelo pedido/env (se válido) primeiro, depois os candidatos.
+  const tryOrder = [
+    ...(model && MODEL_ALLOWLIST.has(model) ? [model] : []),
+    ...(ENV_MODEL && MODEL_ALLOWLIST.has(ENV_MODEL) ? [ENV_MODEL] : []),
+    ...MODEL_CANDIDATES,
+  ].filter((v, i, a) => a.indexOf(v) === i);
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -127,34 +142,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const send = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
   try {
-    const url = `${API_BASE}/${encodeURIComponent(useModel)}:streamGenerateContent?alt=sse`;
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify(body),
-    });
-
-    if (!r.ok || !r.body) {
-      const txt = await r.text().catch(() => '');
+    let r: Awaited<ReturnType<typeof fetch>> | null = null;
+    let usedModel = '';
+    let lastDetail = '';
+    for (const m of tryOrder) {
+      const url = `${API_BASE}/${encodeURIComponent(m)}:streamGenerateContent?alt=sse`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify(buildBody(m)),
+      });
+      if (resp.ok && resp.body) {
+        r = resp;
+        usedModel = m;
+        break;
+      }
+      const txt = await resp.text().catch(() => '');
       const detalhe = txt.replace(/\s+/g, ' ').slice(0, 500);
+      // Modelo inexistente/indisponível → tenta o próximo candidato.
+      if (resp.status === 404 || /not found|no longer available|not supported|NOT_FOUND/i.test(txt)) {
+        lastDetail = detalhe;
+        console.error('[api/chat] modelo indisponível, tentando próximo:', m, detalhe.slice(0, 120));
+        continue;
+      }
+      // Outros erros (chave, cota, API desabilitada) → reporta e para.
       let msg: string;
-      if (r.status === 429) {
+      if (resp.status === 429) {
         msg = 'Limite gratuito da IA atingido. Aguarde ~1 minuto e tente novamente.';
       } else if (/SERVICE_DISABLED|has not been used|is disabled/i.test(txt)) {
         msg =
-          'A API do Gemini NÃO está habilitada no projeto da sua chave. O jeito mais fácil: em aistudio.google.com/apikey clique em "Criar chave de API" → "Criar chave em um NOVO projeto", troque a GEMINI_API_KEY na Vercel e refaça o deploy. ' +
+          'A API do Gemini NÃO está habilitada no projeto da sua chave. Em aistudio.google.com/apikey crie a chave em um NOVO projeto, troque a GEMINI_API_KEY na Vercel e refaça o deploy. ' +
           `(detalhe: ${detalhe})`;
-      } else if (r.status === 403 || /API_KEY_INVALID|API key not valid|permission|PERMISSION_DENIED/i.test(txt)) {
-        msg =
-          'Chave da IA inválida. Crie a chave em aistudio.google.com, coloque em GEMINI_API_KEY na Vercel e refaça o deploy. ' +
-          `(${r.status}: ${detalhe})`;
-      } else if (r.status === 404) {
-        msg = `Modelo de IA indisponível para esta chave. (${r.status}: ${detalhe})`;
+      } else if (resp.status === 403 || /API_KEY_INVALID|API key not valid|permission|PERMISSION_DENIED/i.test(txt)) {
+        msg = 'Chave da IA inválida. Crie a chave em aistudio.google.com e coloque em GEMINI_API_KEY na Vercel. ' + `(${resp.status}: ${detalhe})`;
       } else {
-        msg = `Falha na IA (${r.status}): ${detalhe}`;
+        msg = `Falha na IA (${resp.status}): ${detalhe}`;
       }
-      console.error('[api/chat] Gemini erro:', r.status, detalhe);
+      console.error('[api/chat] Gemini erro:', resp.status, detalhe);
       send({ type: 'error', message: msg });
+      res.end();
+      return;
+    }
+
+    if (!r || !r.body) {
+      send({
+        type: 'error',
+        message: `Nenhum modelo de IA disponível para esta chave. Detalhe do Google: ${lastDetail || 'sem detalhe'}`,
+      });
       res.end();
       return;
     }
@@ -227,7 +261,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (citations.length) send({ type: 'citations', citations });
-    send({ type: 'done', model: useModel });
+    send({ type: 'done', model: usedModel });
   } catch (err) {
     const e = err as { name?: string; message?: string };
     console.error('[api/chat] erro de IA:', e?.name, e?.message);
