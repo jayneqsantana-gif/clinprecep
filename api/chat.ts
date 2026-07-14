@@ -17,8 +17,11 @@ import { AGENTS } from './_agents.js';
 // Streaming pode levar alguns segundos; mantém a folga do plano.
 export const config = { maxDuration: 300 };
 
-const DEFAULT_MODEL = process.env.CLINPRECEP_MODEL || 'gemini-2.5-flash';
 const MODEL_ALLOWLIST = new Set(['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash']);
+// Só aceita CLINPRECEP_MODEL se for um modelo Gemini válido — assim uma variável
+// antiga (ex.: claude-sonnet-5, dos tempos da Anthropic) é ignorada em vez de quebrar.
+const ENV_MODEL = process.env.CLINPRECEP_MODEL;
+const DEFAULT_MODEL = ENV_MODEL && MODEL_ALLOWLIST.has(ENV_MODEL) ? ENV_MODEL : 'gemini-2.5-flash';
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
