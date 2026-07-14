@@ -1,29 +1,20 @@
 import { useRef, useState } from 'react';
-import { Moon, Sun, Trash2, Timer, ShieldCheck, LogOut, Download, Upload } from 'lucide-react';
+import { Moon, Sun, Trash2, KeyRound, ShieldCheck, LogOut, Download, Upload } from 'lucide-react';
 import { useSession } from '@/store/session';
 import { useAuth } from '@/store/auth';
 import { wipeMyData, exportAllData, importAllData, type BackupFile } from '@/lib/remoteRepo';
 import { todayISO } from '@/lib/dates';
-import {
-  getTheme,
-  setTheme as persistTheme,
-  getTimeoutMin,
-  setTimeoutMin,
-} from '@/lib/prefs';
+import { getTheme, setTheme as persistTheme, getSavedPin, clearSavedPin } from '@/lib/prefs';
 
 export function SettingsPage() {
   const lock = useSession((s) => s.lock);
   const { user, signOut } = useAuth();
   const [theme, setTheme] = useState<'dark' | 'light'>(getTheme());
-  const [timeout, setTimeout] = useState(getTimeoutMin());
+  const [pinSaved, setPinSaved] = useState(!!getSavedPin());
 
   function applyTheme(next: 'dark' | 'light') {
     setTheme(next);
     persistTheme(next);
-  }
-  function applyTimeout(min: number) {
-    setTimeout(min);
-    setTimeoutMin(min);
   }
 
   return (
@@ -54,21 +45,25 @@ export function SettingsPage() {
 
       <section className="card space-y-3">
         <div className="flex items-center gap-2 font-semibold">
-          <Timer className="h-4 w-4" /> Bloqueio por inatividade
+          <KeyRound className="h-4 w-4" /> PIN
         </div>
         <p className="text-sm text-muted">
-          Após esse tempo sem uso, o app se bloqueia e pede o PIN novamente.
+          {pinSaved
+            ? 'O PIN está lembrado neste aparelho — o app abre direto, sem pedir o PIN toda vez.'
+            : 'O app vai pedir o PIN na próxima vez que abrir.'}
         </p>
-        <select className="input" value={timeout} onChange={(e) => applyTimeout(Number(e.target.value))}>
-          <option value={2}>2 minutos</option>
-          <option value={5}>5 minutos</option>
-          <option value={10}>10 minutos</option>
-          <option value={30}>30 minutos</option>
-          <option value={0}>Nunca (não recomendado)</option>
-        </select>
-        <button className="btn-ghost w-fit" onClick={lock}>
-          Bloquear agora
-        </button>
+        {pinSaved && (
+          <button
+            className="btn-ghost w-fit"
+            onClick={() => {
+              clearSavedPin();
+              setPinSaved(false);
+              lock();
+            }}
+          >
+            Esquecer PIN neste aparelho
+          </button>
+        )}
       </section>
 
       <section className="card space-y-3">

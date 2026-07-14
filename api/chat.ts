@@ -102,6 +102,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const system = systemExtra ? `${cfg.system}\n\n---\nContexto do paciente:\n${systemExtra}` : cfg.system;
 
   // Monta o corpo do Gemini.
+  const generationConfig: Record<string, unknown> = { maxOutputTokens: cfg.maxTokens ?? 16000 };
+  // "thinking" só existe nos modelos 2.5; desligamos (respostas já estruturadas
+  // pelos prompts) para saída completa e rápida na cota gratuita.
+  if (useModel.includes('2.5')) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+
   const body: Record<string, unknown> = {
     systemInstruction: { parts: [{ text: system }] },
     // Gemini usa papéis 'user' e 'model' (assistant → model).
@@ -109,12 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: toGeminiParts(m.content),
     })),
-    generationConfig: {
-      maxOutputTokens: cfg.maxTokens ?? 16000,
-      // Desliga o "thinking" interno: as respostas já são estruturadas pelos prompts,
-      // e isso mantém a saída completa e rápida dentro da cota gratuita.
-      thinkingConfig: { thinkingBudget: 0 },
-    },
+    generationConfig,
   };
   if (cfg.webSearch) body.tools = [{ googleSearch: {} }];
 
@@ -167,6 +167,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let gotText = false;
+    let finishReason = '';
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -192,11 +194,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (pf?.blockReason) send({ type: 'error', message: 'A IA recusou o pedido (filtro de conteúdo).' });
           continue;
         }
+        if (typeof cand.finishReason === 'string') finishReason = cand.finishReason;
         const parts = (cand.content as { parts?: GeminiPart[] } | undefined)?.parts ?? [];
         for (const p of parts) {
           // Ignora partes de "pensamento" caso apareçam.
           if ((p as { thought?: boolean }).thought) continue;
-          if (typeof p.text === 'string' && p.text) send({ type: 'text', text: p.text });
+          if (typeof p.text === 'string' && p.text) {
+            send({ type: 'text', text: p.text });
+            gotText = true;
+          }
         }
         // Fontes (Google Search grounding).
         const gm = cand.groundingMetadata as
@@ -204,6 +210,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           | undefined;
         for (const gc of gm?.groundingChunks ?? []) addCitation(gc.web?.uri, gc.web?.title);
       }
+    }
+
+    // Não deixa "resposta vazia" silenciosa: se nada foi gerado, explica o porquê.
+    if (!gotText) {
+      let msg = 'A IA não retornou texto. Tente novamente.';
+      if (/SAFETY/i.test(finishReason)) msg = 'A IA bloqueou a resposta pelo filtro de segurança. Reescreva sem termos sensíveis e tente de novo.';
+      else if (/RECITATION/i.test(finishReason)) msg = 'A IA interrompeu por possível reprodução de conteúdo protegido. Tente reformular.';
+      else if (/MAX_TOKENS/i.test(finishReason)) msg = 'A resposta ficou longa demais e foi cortada. Tente um pedido mais curto.';
+      send({ type: 'error', message: msg });
+      res.end();
+      return;
     }
 
     if (citations.length) send({ type: 'citations', citations });
