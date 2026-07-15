@@ -145,6 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let r: Awaited<ReturnType<typeof fetch>> | null = null;
     let usedModel = '';
     let lastDetail = '';
+    let lastWasRateLimit = false;
     for (const m of tryOrder) {
       const url = `${API_BASE}/${encodeURIComponent(m)}:streamGenerateContent?alt=sse`;
       const resp = await fetch(url, {
@@ -159,17 +160,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const txt = await resp.text().catch(() => '');
       const detalhe = txt.replace(/\s+/g, ' ').slice(0, 500);
-      // Modelo inexistente/indisponível → tenta o próximo candidato.
-      if (resp.status === 404 || /not found|no longer available|not supported|NOT_FOUND/i.test(txt)) {
+      const modeloIndisponivel = resp.status === 404 || /not found|no longer available|not supported|NOT_FOUND/i.test(txt);
+      const noLimite = resp.status === 429 || resp.status === 503 || /RESOURCE_EXHAUSTED|quota|overloaded|UNAVAILABLE/i.test(txt);
+      // Modelo indisponível OU no limite → tenta o próximo candidato (cada modelo
+      // tem cota gratuita separada, então isso soma a capacidade de todos).
+      if (modeloIndisponivel || noLimite) {
         lastDetail = detalhe;
-        console.error('[api/chat] modelo indisponível, tentando próximo:', m, detalhe.slice(0, 120));
+        lastWasRateLimit = noLimite;
+        console.error('[api/chat] pulando modelo:', m, resp.status, detalhe.slice(0, 100));
         continue;
       }
-      // Outros erros (chave, cota, API desabilitada) → reporta e para.
+      // Erros que não adianta tentar outro modelo (chave, API desabilitada).
       let msg: string;
-      if (resp.status === 429) {
-        msg = 'Limite gratuito da IA atingido. Aguarde ~1 minuto e tente novamente.';
-      } else if (/SERVICE_DISABLED|has not been used|is disabled/i.test(txt)) {
+      if (/SERVICE_DISABLED|has not been used|is disabled/i.test(txt)) {
         msg =
           'A API do Gemini NÃO está habilitada no projeto da sua chave. Em aistudio.google.com/apikey crie a chave em um NOVO projeto, troque a GEMINI_API_KEY na Vercel e refaça o deploy. ' +
           `(detalhe: ${detalhe})`;
@@ -185,10 +188,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!r || !r.body) {
-      send({
-        type: 'error',
-        message: `Nenhum modelo de IA disponível para esta chave. Detalhe do Google: ${lastDetail || 'sem detalhe'}`,
-      });
+      const msg = lastWasRateLimit
+        ? 'Limite gratuito da IA atingido em todos os modelos. Aguarde ~1 minuto e tente de novo.'
+        : `Nenhum modelo de IA disponível para esta chave. Detalhe do Google: ${lastDetail || 'sem detalhe'}`;
+      send({ type: 'error', message: msg });
       res.end();
       return;
     }
