@@ -46,7 +46,21 @@ export function PatientPage() {
   const key = useSession((s) => s.key);
   const navigate = useNavigate();
   const [patient, setPatient] = useState<Patient | null | undefined>(undefined);
-  const [tab, setTab] = useState<TabKey>('visao');
+  // Aba ativa persistida por paciente: se a tela remontar (troca de janela,
+  // atualização do PWA), volta para a mesma aba em vez de cair na Visão Geral.
+  const tabKey = `clinprecep.tab.${id}`;
+  const [tab, setTabState] = useState<TabKey>(() => {
+    const saved = id ? (localStorage.getItem(tabKey) as TabKey | null) : null;
+    return saved && TABS.some((t) => t.key === saved) ? saved : 'visao';
+  });
+  const setTab = (t: TabKey) => {
+    setTabState(t);
+    try {
+      localStorage.setItem(tabKey, t);
+    } catch {
+      /* ignora */
+    }
+  };
   const [presenting, setPresenting] = useState(false);
   const [diretrizTopic, setDiretrizTopic] = useState('');
 

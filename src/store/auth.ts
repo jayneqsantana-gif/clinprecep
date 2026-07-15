@@ -30,8 +30,12 @@ export const useAuth = create<AuthState>((set) => ({
     });
     if (!subscribed) {
       subscribed = true;
+      // O Supabase dispara este callback ao focar a janela / renovar o token,
+      // com um NOVO objeto `user`. Se o id não mudou, mantemos a MESMA referência
+      // para não re-inicializar a sessão e remontar a tela (perdendo aba/texto).
       supabase.auth.onAuthStateChange((_event, session) => {
-        set({ user: session?.user ?? null, ready: true });
+        const next = session?.user ?? null;
+        set((s) => (s.user?.id === next?.id ? { ready: true } : { user: next, ready: true }));
       });
     }
   },
