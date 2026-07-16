@@ -17,16 +17,17 @@ import { AGENTS } from './_agents.js';
 // Streaming pode levar alguns segundos; mantém a folga do plano.
 export const config = { maxDuration: 300 };
 
-// Modelos Gemini candidatos, em ordem de preferência. O Google muda o catálogo
-// e alguns IDs "somem" para chaves novas — por isso usamos o alias `-latest`
-// (sempre aponta pro atual) + fallbacks, e tentamos cada um até um funcionar.
+// Modelos Gemini candidatos, em ordem: primeiro os de MAIOR cota gratuita.
+// São modelos DISTINTOS (cada um tem cota separada), então ao bater o limite de
+// um, o próximo ainda tem quota. O Google muda o catálogo e alguns IDs "somem"
+// para chaves novas — o fallback pula qualquer 404 automaticamente.
 const MODEL_CANDIDATES = [
-  'gemini-flash-latest',
-  'gemini-2.5-flash-lite',
-  'gemini-flash-lite-latest',
-  'gemini-2.0-flash',
+  'gemini-2.5-flash-lite', // maior cota diária, boa qualidade
+  'gemini-flash-latest', // 2.5-flash (melhor qualidade), alias sempre atual
+  'gemini-2.0-flash-lite', // cota separada
+  'gemini-2.0-flash', // cota separada
 ];
-const MODEL_ALLOWLIST = new Set([...MODEL_CANDIDATES, 'gemini-2.5-flash']);
+const MODEL_ALLOWLIST = new Set([...MODEL_CANDIDATES, 'gemini-2.5-flash', 'gemini-flash-lite-latest']);
 // Só aceita CLINPRECEP_MODEL se for um modelo Gemini conhecido (ignora lixo antigo).
 const ENV_MODEL = process.env.CLINPRECEP_MODEL;
 
@@ -189,7 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!r || !r.body) {
       const msg = lastWasRateLimit
-        ? 'Limite gratuito da IA atingido em todos os modelos. Aguarde ~1 minuto e tente de novo.'
+        ? 'Limite gratuito da IA atingido em todos os modelos agora. Espere ~1 minuto e tente de novo. Se persistir por muito tempo, é o limite diário da cota grátis (zera no dia seguinte).'
         : `Nenhum modelo de IA disponível para esta chave. Detalhe do Google: ${lastDetail || 'sem detalhe'}`;
       send({ type: 'error', message: msg });
       res.end();
